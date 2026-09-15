@@ -1,0 +1,680 @@
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 898, in _prepare_cc_augmented_dag
+    raise RuntimeError("Virtual source cannot reach virtual sink through current-carrying edges.")
+RuntimeError: Virtual source cannot reach virtual sink through current-carrying edges.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: Virtual source cannot reach virtual sink through current-carrying edges.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/process.py", line 246, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 80, in _worker_entry
+    return run_microstructure(
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 557, in run_microstructure
+    metrics, full = runners[method]()
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 518, in <lambda>
+    "berg_cc": lambda: run_berg_cc(body_array, berg_cc_config, verbose=verbose,
+  File "/trace/group/acmegroup/rochan/Constrictivity/pipeline.py", line 316, in run_berg_cc
+    result = berg_cc.compute_all_berg(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1889, in compute_all_berg
+    build_streamtubes(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1297, in build_streamtubes
+    streamtubes, V_stuck_total = _decompose_fast(method)
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 1239, in _decompose_fast
+    dag = _prepare_cc_augmented_dag(
+  File "/trace/group/acmegroup/rochan/Constrictivity/berg_cc.py", line 871, in _prepare_cc_augmented_dag
+    raise RuntimeError("No current-carrying augmented edges above threshold.")
+RuntimeError: No current-carrying augmented edges above threshold.
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/trace/group/acmegroup/rochan/Constrictivity/run_batch.py", line 131, in _run_all
+    fut.result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/trace/group/acmegroup/conda_envs/envs/rbenv/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+RuntimeError: No current-carrying augmented edges above threshold.

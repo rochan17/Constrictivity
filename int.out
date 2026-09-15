@@ -1,0 +1,32 @@
+[run_batch] total cores: 64 | cores/microstructure: 16 | parallel workers: 4 | microstructures: 30
+[FAIL] Coarse_microstructure_2
+[FAIL] Coarse_microstructure_3
+[FAIL] Coarse_microstructure_4
+[FAIL] Coarse_microstructure_6
+[OK]   Coarse_microstructure_1
+[OK]   Coarse_microstructure_0
+[FAIL] Coarse_microstructure_7
+[OK]   Coarse_microstructure_5
+[OK]   Coarse_microstructure_9
+[FAIL] Coarse_microstructure_8
+[FAIL] Fine_microstructure_1
+[OK]   Fine_microstructure_2
+[FAIL] Fine_microstructure_3
+[OK]   Fine_microstructure_0
+[OK]   Fine_microstructure_4
+[FAIL] Fine_microstructure_5
+[OK]   Fine_microstructure_6
+[OK]   Fine_microstructure_7
+[FAIL] Medium_microstructure_0
+[OK]   Fine_microstructure_8
+[FAIL] Fine_microstructure_9
+[FAIL] Medium_microstructure_1
+[FAIL] Medium_microstructure_2
+[FAIL] Medium_microstructure_3
+[FAIL] Medium_microstructure_4
+[FAIL] Medium_microstructure_5
+[FAIL] Medium_microstructure_6
+[FAIL] Medium_microstructure_8
+[FAIL] Medium_microstructure_7
+[FAIL] Medium_microstructure_9
+[run_batch] done in 65.6s | ok=10 fail=20

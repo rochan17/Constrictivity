@@ -1,0 +1,47 @@
+# Minimum versions this pipeline (berg_cc.py, berg_voxel_fast.py,
+# particulate_claude.py, pipeline.py, run_batch.py, collect_results.py) was
+# built and tested against -- newer versions are fine (>=, not ==). Install
+# with:
+#
+#     pip install -r requirements.txt
+#
+# Requires Python >=3.9,<3.13 -- numba 0.59.1 has no build for 3.13+; if you
+# install a newer numba that does support 3.13+, that ceiling no longer
+# applies.
+# Verified with a clean install (no other packages present) on Python 3.11.
+#
+# torch: this pipeline runs taufactor on CPU only (see pipeline.py's
+# run_taufactor, device="cpu"), so the default CPU wheel is sufficient --
+# no CUDA build required, even on a GPU node. Not pinned here since
+# taufactor already pulls in a compatible torch as its own dependency.
+#
+# numba: required for the fast 'greedy_fast'/'topological' streamtube
+# decomposition in berg_voxel_fast.py and berg_cc.py. Both fall back to an
+# equivalent pure-Python implementation if numba is missing, but numba is
+# what makes them fast -- don't skip it.
+#
+# pyamg: optional accelerator for berg_voxel_fast's KCL solve (falls back
+# to scipy's direct sparse solver if absent); kept pinned since it's cheap
+# to install and meaningfully faster on large networks.
+#
+# numpy<2: capped, not just floored. NumPy 2.0 changed the ABI (dtype
+# struct size), and compiled-extension packages built against NumPy 1.x
+# (e.g. an older scikit-image wheel) will fail to import against a NumPy
+# 2.x runtime with "numpy.dtype size changed, may indicate binary
+# incompatibility" -- this stack was only verified against NumPy 1.26.4.
+# If everything below is upgraded together to NumPy-2.0-compatible
+# releases (recent scikit-image/scipy/numba all support it), this cap can
+# be lifted -- but don't let numpy alone drift past 2.0 while the others
+# stay floored at their old versions, that's exactly the mismatch that
+# causes the import crash.
+
+numpy>=1.26.4,<2
+scipy>=1.14.1
+networkx>=3.3
+pandas>=2.2.3
+numba>=0.59.1
+taufactor>=1.2.1
+pyamg>=5.2.1
+scikit-image>=0.20.0
+shapely>=2.1.2
+tqdm>=4.67.1
