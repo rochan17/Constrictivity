@@ -673,7 +673,7 @@ def solve_potential_field(arrays, G, inlet_indices, outlet_indices,
 
 def filter_nonconducting_nodes_directed(arrays, current, solution_data,
                                          coord_mask,
-                                         I_threshold_factor=1e-10,
+                                         I_threshold_factor=1e-15,
                                          verbose=True):
     """
     Post-solve directed reachability filter.
@@ -700,7 +700,7 @@ def filter_nonconducting_nodes_directed(arrays, current, solution_data,
         Only nodes where coord_mask=True are checked.
     I_threshold_factor : float
         Throats with |current| < I_threshold_factor * I_total are
-        treated as numerical noise. Default 1e-10.
+        treated as numerical noise. Default 1e-15.
     verbose : bool
 
     Returns
@@ -910,6 +910,16 @@ def _prepare_cc_augmented_dag(arrays, current, potential, inlet_indices, outlet_
     ptr[0] = 0
     np.cumsum(counts, out=ptr[1:])
 
+
+
+    print({
+        "S": int(S), "T": int(T), "n_aug": int(n_aug),
+        "I_threshold": float(I_threshold), "n_pruned": n_pruned,
+        "up": up_s, "dn": dn_s, "flow": flow_s,
+        "kind": kind_s, "edge": edge_s, "ptr": ptr,
+    })
+
+
     return {
         "S": int(S), "T": int(T), "n_aug": int(n_aug),
         "I_threshold": float(I_threshold), "n_pruned": n_pruned,
@@ -1014,7 +1024,7 @@ def build_streamtubes(arrays, current, potential, solution_data,I_threshold,
     inlet_indices  = np.asarray(solution_data['inlet_indices'],  dtype=int)
     outlet_indices = np.asarray(solution_data['outlet_indices'], dtype=int)
     I_total        = float(solution_data['total_current'])
-    I_threshold    = I_threshold if I_threshold is not None else I_total * 1e-5
+    I_threshold    = I_threshold if I_threshold is not None else I_total * 1e-10
     inlet_set      = set(inlet_indices.tolist())
     outlet_set     = set(outlet_indices.tolist())
 
@@ -1184,7 +1194,9 @@ def build_streamtubes(arrays, current, potential, solution_data,I_threshold,
                 node_path.append(next_node)
                 visited.add(next_node)
 
+            stuck_path_lengths = []
             if stuck or node_path[-1] not in outlet_set:
+                stuck_path_lengths.append(len(node_path))
                 if len(node_path) >= 2:
                     key          = (node_path[0], node_path[1])
                     drained_flow = remaining.get(key, 0.0)   # use remaining flow directly
@@ -1206,7 +1218,16 @@ def build_streamtubes(arrays, current, potential, solution_data,I_threshold,
             I_gamma    = min(remaining.get(e, 0.0) for e in path_edges)
 
             if I_gamma < EPS:
-                break
+                for e in path_edges:
+                    t_idx = edge_to_throat.get(e)
+                    drained = remaining.get(e, 0.0)
+                    remaining[e] = 0.0
+                    if t_idx is not None and drained > EPS:
+                        abs_I_t = abs(float(current[t_idx]))
+                        if abs_I_t > I_threshold:
+                            V_t = V_body1[t_idx] + V_throat[t_idx] + V_body2[t_idx]
+                            V_stuck_total += (drained / abs_I_t) * V_t
+                continue
 
             # Subtract I_Γ from all edges in path
             for e in path_edges:

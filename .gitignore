@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+
+data/
+data_2_SNOW_highsigma/
+test_runs/
+
+analysis/output/
+analysis/output_old/
+analysis/REPORT.md
+analysis/artificial/*.csv
+analysis/collated_info/*.pdf
+analysis/collated_info/*.png
+analysis/collated_info/*.csv
+analysis/collated_info/COLLATED_REPORT.md
+
+# Block any new top-level folder (existing tracked folders are exempted below)
+/*/
+!/analysis/

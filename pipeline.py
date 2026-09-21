@@ -308,7 +308,7 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
 
     axis = pc.DIRECTION_TO_AXIS[direction]
     body_array, _, _ = pc.merge_boundary_only_bodies_iterative(body_array, axis=axis, verbose=verbose)
-    body_array, _, _ = pc.merge_short_circuit_bodies(body_array, axis=axis, verbose=verbose)
+    body_array, _  = pc.merge_short_circuit_bodies(body_array, axis=axis, verbose=verbose)
 
     network = pc.extract_throats_from_bodies_voxel_parallel(
         body_array,
@@ -414,7 +414,7 @@ def _load_manifest(folder: Path) -> Dict[str, Any]:
 def run_microstructure(
     folder,
     cores_per_task: int,
-    phase_id: int = 1,
+    phase_id: int = 3,
     axis: int = 0,
     segmented_file: str = "segmented.npy",
     body_array_file: str = "body_array.npy",

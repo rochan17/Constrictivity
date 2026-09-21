@@ -275,7 +275,7 @@ class BergPNConfig:
     axis: int = 0
     dx: float = 1.0
     sigma: float = 1.0
-    phase_id: int = 1
+    phase_id: int = 3
     inlet_value: float = 1.0
     outlet_value: float = 0.0
 

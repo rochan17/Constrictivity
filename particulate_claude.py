@@ -118,11 +118,8 @@ except Exception:                                    # pragma: no cover
 SPHERE_VOLUME_CONSTANT = 3.0 / (4.0 * np.pi)
 DEFAULT_ALPHA = 0.5
 # A_tk / A_itk above this triggers the uniform-pipe (equal-thirds) fallback.
-# NOTE: Berg's effective-length formula d_eff = d*(1 - alpha*sqrt(A_tk/A_itk))
-# only goes negative for ratio > (1/alpha)^2 (= 4 when alpha = 0.5), so this
-# default (~1.587) is conservative.  Raise it toward (1/alpha)^2 if you want
-# fewer throats on the fallback path.
-RATIO_THRESHOLD = 4 ** (1 / 3)
+#RATIO_THRESHOLD = 4 ** (1 / 3)
+RATIO_THRESHOLD = 1
 
 # 8 corner offsets of a unit voxel, used by the voxel-projection area method.
 _CUBE_CORNERS = np.array(
@@ -682,8 +679,8 @@ def compute_throat_areas(throat_coords, throat_centroid, flow_direction, voxel_s
     if num_voxels < 3:
         return {
             'naive_area':          num_voxels * face_area,
-            'naive_projected':     0.0,
-            'vox_projection_area': 0.0,
+            'naive_projected':     num_voxels * face_area,
+            'vox_projection_area': num_voxels * face_area,
             'plane_normal':        np.array([0.0, 0.0, 1.0]),
             'num_voxels':          num_voxels,
             'cos_theta':           0.0,
@@ -1432,20 +1429,19 @@ def _compute_volume_share(body, throat_id, A_tk, sum_throat_areas, split_volume_
 
 def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA):
     """
-    Effective properties for one body side of a connection.
+    Effective properties for one body side of a connection (Berg 2012).
 
     Returns a dict (d_itk, A_itk, ratio, d_eff_itk, A_eff_itk, V_eff_itk),
     or None if the body-to-throat distance is zero.
 
-    `alpha` is now honoured here (the original hard-coded 0.5).  d_eff is
-    floored at a small positive fraction of d_itk so it can never go
-    negative for alpha values near 1 (no effect for the default alpha=0.5,
-    where d_eff stays positive throughout the normal regime).
+    Berg's shape is used only for ratio = A_tk / A_itk <= 1, where it is
+    physical (resistance decreases as the throat widens). For ratio > 1 the
+    connection goes to the fallback (RATIO_THRESHOLD = 1.0), which overwrites
+    these values, so they are returned as a harmless uniform leg.
     """
     if throat.center is not None:
-        body_center = np.array(body.centroid, dtype=float)
-        throat_center = np.array(throat.center, dtype=float)
-        d_itk = float(np.linalg.norm(throat_center - body_center))
+        d_itk = float(np.linalg.norm(np.asarray(throat.center, dtype=float) -
+                                     np.asarray(body.centroid, dtype=float)))
     else:
         d_itk = (throat.length_body1_to_ct_voxels
                  if throat.body1_id == body.body_id
@@ -1455,14 +1451,18 @@ def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA):
         return None
 
     A_itk = V_itk / d_itk
-    ratio = A_tk / A_itk if A_itk > 0 else np.inf
+    ratio = A_tk / A_itk if A_itk > 0 else np.inf     # true ratio, never clamped
 
-    d_eff_itk = d_itk * (1.0 - alpha * np.sqrt(A_tk / A_itk)) if A_itk > 0 else d_itk
-    d_eff_itk = max(d_eff_itk, 1e-9 * d_itk)          # defensive positivity floor
-
-    numerator = A_itk * d_itk - A_tk * (d_itk - d_eff_itk)
-    A_eff_itk = numerator / d_eff_itk if d_eff_itk > 0 else A_itk
-    V_eff_itk = d_eff_itk * A_eff_itk
+    if ratio <= 1.0:
+        s = np.sqrt(ratio)
+        d_eff_itk = d_itk * (1.0 - alpha * s)
+        # Closed form of (A_itk*d - A_tk*(d - d_eff)) / d_eff.
+        # Both factors are positive for ratio <= 1 and alpha < 1.
+        A_eff_itk = A_itk * (1.0 - alpha * ratio**1.5) / (1.0 - alpha * s)
+    else:
+        # Handled by the fallback; placeholder values only.
+        d_eff_itk = d_itk
+        A_eff_itk = A_itk
 
     return {
         'd_itk':     d_itk,
@@ -1470,7 +1470,7 @@ def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA):
         'ratio':     ratio,
         'd_eff_itk': d_eff_itk,
         'A_eff_itk': A_eff_itk,
-        'V_eff_itk': V_eff_itk,
+        'V_eff_itk': d_eff_itk * A_eff_itk,
     }
 
 
