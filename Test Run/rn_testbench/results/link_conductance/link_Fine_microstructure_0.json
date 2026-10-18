@@ -12,12 +12,12 @@
  },
  "short_circuit": {
   "n_links": 510,
-  "G_ratio": 0.7025368687263597,
-  "G_ratio_fallback": 0.5762005146767583,
-  "G_ratio_berg": 1.1579979284545125,
-  "G_ratio_le16faces": 2.013262418156153,
-  "G_ratio_gt16faces": 0.6643843423659175,
-  "w_frac_fallback": 0.7159822425303493,
+  "G_ratio": 0.5296879024005887,
+  "G_ratio_fallback": 0.44012082652165113,
+  "G_ratio_berg": 0.9209267179617664,
+  "G_ratio_le16faces": 1.6323815611202726,
+  "G_ratio_gt16faces": 0.4989947261862007,
+  "w_frac_fallback": 0.7491116693659776,
   "w_frac_le16faces": 0.050364878335852875
  }
 }

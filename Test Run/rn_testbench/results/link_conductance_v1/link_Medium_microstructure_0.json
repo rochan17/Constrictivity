@@ -1,0 +1,23 @@
+{
+ "sample": "Medium_microstructure_0",
+ "vanilla": {
+  "n_links": 639,
+  "G_ratio": 0.6612134112767264,
+  "G_ratio_fallback": 0.529106628688841,
+  "G_ratio_berg": 1.0156802867314934,
+  "G_ratio_le16faces": 1.1554934069271379,
+  "G_ratio_gt16faces": 0.5588905364604988,
+  "w_frac_fallback": 0.6582142391243487,
+  "w_frac_le16faces": 0.23146947789381034
+ },
+ "short_circuit": {
+  "n_links": 639,
+  "G_ratio": 0.9563370213917526,
+  "G_ratio_fallback": 0.73293426091512,
+  "G_ratio_berg": 1.2953857700322247,
+  "G_ratio_le16faces": 1.5740370113198214,
+  "G_ratio_gt16faces": 0.8230636982115315,
+  "w_frac_fallback": 0.532834551588368,
+  "w_frac_le16faces": 0.23146947789381034
+ }
+}

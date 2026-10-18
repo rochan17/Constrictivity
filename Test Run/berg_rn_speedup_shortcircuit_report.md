@@ -1,6 +1,6 @@
 # Berg RN: Speedups, a `vanilla` / `short_circuit` Toggle, and Validation Against TauFactor
 
-Follow-up to [`berg_rn_improvements_report.md`](berg_rn_improvements_report.md). That report proposed the speedups and the "1-Pass Geometric Short-Circuit" from scratch prototypes. This one **implements** them in [`particulate_claude.py`](../particulate_claude.py), [`berg_cc.py`](../berg_cc.py) and [`pipeline.py`](../pipeline.py). I tested them on `TRACE_fine_test` (`Fine_microstructure_0`–`4`, $150^3$ voxels), then ran all **25** microstructures in `data_new`, and then explained the remaining discrepancies against TauFactor with diagnostics built on the TauFactor potential field itself.
+Follow-up to [`berg_rn_improvements_report.md`](berg_rn_improvements_report.md). That report proposed the speedups and the "1-Pass Geometric Short-Circuit" from scratch prototypes. This one **implements** them in [`particulate_claude.py`](../particulate_claude.py), [`berg_cc.py`](../berg_cc.py) and [`pipeline.py`](../pipeline.py). I tested them on `TRACE_fine_test` (`Fine_microstructure_0`–`4`, $150^3$ voxels), then on the **10 Fine** microstructures in `data_new`, and explained the remaining discrepancies against TauFactor with diagnostics built on the TauFactor potential field itself. From this revision on the report covers **Fine media only**; the earlier Medium/Coarse analysis is in git history.
 
 **Environment:** conda env `rbenv` (numpy 1.26.4, scipy 1.14.1, shapely 2.1.2, scikit-image 0.20.0, numba 0.59.1). All scripts and raw results are in [`rn_testbench/`](rn_testbench/) (§8).
 
@@ -8,16 +8,25 @@ Follow-up to [`berg_rn_improvements_report.md`](berg_rn_improvements_report.md).
 
 ## 0. Summary
 
+> [!IMPORTANT]
+> **Revision (2026-10-18): the short-circuit rule.** The centroid stays where it is, and each half-link is only **shortened along its own ray**. The lengths are the least-resistance ones for which every pair of throats of a body is charged between its chord and its vanilla route through the centroid:
+> $$\lVert\mathbf p_p-\mathbf p_r\rVert\ \le\ \tilde d_{ip}+\tilde d_{ir}\ \le\ d_{ip}+d_{ir}\qquad\text{for all throat pairs }(p,r).$$
+> Both bounds hold by construction. Two earlier rules are superseded (git history):
+> - the weighted-ratio rule, which charged $47\%$ of throat pairs less than their chord;
+> - a single-junction rule, which respected the chord but kept a full star detour.
+
 | # | Result | Evidence |
 | :--- | :--- | :--- |
 | 1 | **Speed: $69.1\text{ s} \to 7.3\text{ s}$ per $150^3$ sample ($9.5\times$), with unchanged results** | Vanilla mode is bit-identical through the network arrays on all 5 test samples; metrics agree to $\le 2.5\times10^{-14}$ (§2) |
 | 2 | **Toggle:** `rn_method = 'vanilla' \| 'short_circuit'`, default set by one constant | `DEFAULT_RN_METHOD` in `particulate_claude.py`; recorded in the cache hash (§1.2) |
 | 3 | **The body merges now run inside the berg_cc extraction step** | `extract_throats_from_bodies_voxel_parallel(merge_bodies=True)` (§1.1) |
-| 4 | **Fine media (10):** short-circuit removes the path-length error | $T_I$ error $+24.3\% \to -1.2\%$; $1/F$ error $-38\% \to -6.6\%$ (§5) |
-| 5 | **Medium / Coarse media (15):** short-circuit makes $1/F$ worse ($+40\%$, $+128\%$) | Vanilla's agreement there was a **cancellation of errors**; the real error is constriction at narrow necks (§6.4–6.5) |
+| 4 | **Both bounds hold exactly:** on Fine_0, $0$ of $3{,}886$ interior throat pairs fall below the chord and $0$ are longer than vanilla; every 2-throat body sits exactly on its chord | §3.3 |
+| 5 | **Fine $1/F$:** $0.618 \to$ **$0.731$** of TauFactor (geometric mean, 10 samples); mean absolute error $38.1\% \to 26.8\%$ | §5 |
+| 6 | **Path length:** $T_I$ error $+24.3\% \to$ **$+12.2\%$**; porosity and constriction factors stay within $5\%$ of 1 | §5, §6.2 |
+| 7 | **What is left is almost all in-body excess over the chords:** $T_I/\tau^{\text{TF}} = 1.122 = \underbrace{1.101}_{\text{in-body excess}} \times \underbrace{1.019}_{\text{throat-centroid polyline}}$ | §6.3 |
 
-> [!IMPORTANT]
-> **Recommendation:** use `short_circuit` as the default RN. It is the physically correct path-length correction, and it is the variant whose agreement with TauFactor does not depend on cancelling errors. Quote Medium/Coarse $1/F$ values with the caveat in §6. The next modelling target is the **conductance of narrow throats**, not the path length.
+> [!TIP]
+> **Default:** `DEFAULT_RN_METHOD = 'vanilla'`, so every existing result and caller is unchanged; `short_circuit` is opt-in (`rn_method='short_circuit'`). On Fine media it is the largest correction you can make with one length per half-link without ever charging a path shorter than its chord or longer than vanilla. It costs $0.13\text{ s}$ per sample. The remaining $\approx 10\%$ path excess comes from half-links shared by several throat pairs (§6.3). Removing it needs lengths that depend on the throat *pair*, for example direct throat-to-throat links inside each body.
 
 ---
 
@@ -32,7 +41,7 @@ Follow-up to [`berg_rn_improvements_report.md`](berg_rn_improvements_report.md).
 | | `compute_initial_body_props` | Labelled reductions (`bincount`, `ndi.center_of_mass` / `ndi.maximum` with `labels=`) |
 | | `extract_throats_from_bodies_voxel_parallel` | Intersection crop per body pair; new `merge_bodies=` option |
 | | `get_planar_area` | Vectorised per-voxel hulls (`shapely.convex_hull(shapely.multipoints(...))`) |
-| | `compute_short_circuit_distances` (new) | Short-circuited half-link lengths $\tilde d_{ik}$ |
+| | `compute_short_circuit_distances`, `_chord_bounded_lengths` (new) | Short-circuit half-link lengths $\tilde d_{ik}$, chord-bounded per body (§3.2) |
 | | `calculate_network_effective_properties` | New `rn_method=` and `direction=` arguments |
 | | `_compute_body_side` | New `d_override=` argument |
 | | `PoreNetwork` | New fields `flow_axis`, `body_array` (merged labels), `rn_method` |
@@ -49,14 +58,14 @@ Follow-up to [`berg_rn_improvements_report.md`](berg_rn_improvements_report.md).
 pc.calculate_network_effective_properties(net, rn_method='vanilla')        # original
 pc.calculate_network_effective_properties(net, rn_method='short_circuit')  # new
 
-# global revert: one line in particulate_claude.py
-DEFAULT_RN_METHOD = 'vanilla'
+# global switch: one line in particulate_claude.py (default is 'vanilla')
+DEFAULT_RN_METHOD = 'short_circuit'
 ```
 
 ```bash
 # batch runs: per-run override (cached as its own version)
 python run_batch.py --data-dir data_new --cores-per-microstructure 4 \
-    --berg-cc-config '{"rn_method": "vanilla"}'
+    --berg-cc-config '{"rn_method": "short_circuit"}'
 ```
 
 > [!NOTE]
@@ -126,133 +135,119 @@ $$
 G_{ik} = \frac{\sigma A_{ik}}{d_{ik}} = \frac{\sigma V_{ik}}{d_{ik}^{2}} .
 $$
 
-Current crossing body $i$ from throat $p$ to throat $r$ is charged the **star** length $d_{ip} + d_{ir}$ instead of something close to the **chord** $\lVert \mathbf{p}_p - \mathbf{p}_r \rVert$. Inlet and outlet bodies are worse: their node is the centroid of the body's *face patch*, so each throat is also charged a transverse detour along the equipotential plane.
-
-If every path is $\lambda$ times too long **at fixed volume**, then
+Current that enters body $i$ through throat $p$ and leaves through throat $r$ is charged the route through the centroid, $d_{ip} + d_{ir}$. The shortest possible route is the **chord** $\lVert \mathbf{p}_p - \mathbf{p}_r \rVert$, and a real streamline in a compact body runs close to it. Inlet and outlet bodies are worse: their node is the centroid of the body's *face patch*, so each throat is also charged a transverse detour along the equipotential face. If every path is $\lambda$ times too long **at fixed volume**, then
 
 $$
 d \to \lambda d, \qquad A = \frac{V}{d} \to \frac{A}{\lambda}, \qquad G = \frac{\sigma V}{d^2} \to \frac{G}{\lambda^{2}} .
 $$
 
-The measured shortening below is $\approx 0.77$, i.e. $\lambda \approx 1.30$. That predicts a $1/F$ deficit of $1 - 1/\lambda^2 \approx 41\%$; vanilla on Fine media is at $-38\%$ on average.
+On Fine_0 the current-weighted ratio of path to chord through interior bodies is $\lambda = 1.270$ for vanilla.
 
-### 3.2 The rules (`compute_short_circuit_distances`)
+### 3.2 The rule (`compute_short_circuit_distances`)
 
-Only $d_{ik}$ changes. $V_{ik}$ is untouched, so $A_{ik} = V_{ik} / \tilde d_{ik}$ and the total pore volume $\Omega$ is **conserved exactly**: $\Omega$ is identical between the two variants on every sample.
+Only $d_{ik}$ changes. $V_{ik}$ is untouched, so $A_{ik} = V_{ik} / \tilde d_{ik}$ and the total pore volume $\Omega$ is **conserved exactly**. The centroid $\mathbf c_i$ is **not moved**: each half-link keeps its ray from $\mathbf p_k$ towards $\mathbf c_i$, and only its length can shrink, $\tilde d_{ik} \le d_{ik}$.
 
-**Dirichlet (inlet/outlet) bodies**, classified with the same test as `berg_cc.get_inlet_outlet_indices`. The whole contact patch is one equipotential, so current leaves it perpendicular to the plane:
-
-$$
-\tilde d_{ik}^{\,\text{plane}} = \min\!\Big(d_{ik},\; \max\big(\lvert p_{k,x} - x_{\text{plane}} \rvert,\; 0.5\big)\Big).
-$$
-
-**Interior bodies with $z_i \ge 2$.** Throat $p$ is paired with every other throat $r$ of the same body:
+The solve does not know in advance which throats of a body are inflow and which are outflow, so one set of lengths has to serve **every** throat pair at once. For each pair, the path must lie between the shortest possible route (the chord) and the vanilla route (through the centroid):
 
 $$
-w_{pr} = A_{t,r}\,\big(\lvert \Delta x_{pr} \rvert + 0.5\big), \qquad
-\rho_p = \frac{\sum_{r \ne p} w_{pr}\, \min\!\big(\ell^{\text{chord}}_{pr},\, \ell^{\text{star}}_{pr}\big)}{\sum_{r \ne p} w_{pr}\, \ell^{\text{star}}_{pr}}, \qquad
-\tilde d_{ip} = d_{ip}\,\mathrm{clip}\big(\rho_p,\, 0.25,\, 1\big),
+\lVert\mathbf p_p-\mathbf p_r\rVert\ \le\ \tilde d_{ip}+\tilde d_{ir}\ \le\ d_{ip}+d_{ir}.
 $$
 
-with $\ell^{\text{chord}}_{pr} = \lVert \mathbf{p}_p - \mathbf{p}_r \rVert$ and $\ell^{\text{star}}_{pr} = d_{ip} + d_{ir}$. The weight $w_{pr}$ is a geometry-only proxy for how much current $p$ exchanges with $r$: larger, more axially separated partner throats carry more of it.
+The upper bound follows from $\tilde d_{ik} \le d_{ik}$. Within these bounds the code takes the lengths that give the body the **least half-link resistance**:
 
-**Dead-end bodies ($z_i = 1$):** unchanged.
+$$
+\boxed{\;
+\min_{\tilde d}\ \sum_k \frac{\tilde d_{ik}^{\,2}}{\sigma V_{ik}}
+\quad\text{s.t.}\quad
+\tilde d_{ip}+\tilde d_{ir}\ \ge\ \lVert\mathbf p_p-\mathbf p_r\rVert\ \ \forall\,p\ne r,
+\qquad
+\min(0.5,\,d_{ik})\ \le\ \tilde d_{ik}\ \le\ d_{ik}
+\;}
+$$
 
-The Berg effective geometry ($\alpha$-formula, `RATIO_THRESHOLD`, uniform-pipe fallback) is then built exactly as before, on the shortened lengths.
+| Case | Result | Why |
+| :--- | :--- | :--- |
+| **Interior, $z_i = 2$** | $\tilde d_{i1}+\tilde d_{i2} = \lVert\mathbf p_1-\mathbf p_2\rVert$ exactly, split $\propto V_{ik}$ (equal halves for the equal split) | Closed form. The two half-links then have exactly the resistance of **one uniform straight tube** of the body's volume between the two throats, $R = \ell^2/(\sigma\,2V_{ik})$ |
+| **Interior, $z_i \ge 3$** | Lengths between the chords and the centroid route; at least one pair per throat is usually *at* its chord | A half-link shared by several pairs must be long enough for the pair that needs it most |
+| **Inlet / outlet** (Dirichlet, same test as `berg_cc.get_inlet_outlet_indices`) | $\tilde d_{ik} = \lvert p_{k,x} - c_{i,x}\rvert \le d_{ik}$ | The node is on the equipotential face, so throat $k$ is reached straight from the face: the transverse detour along the face is dropped |
+| **Dead end, $z_i = 1$** | Unchanged | No pair to bound |
 
-### 3.3 Ablation and sensitivity (Fine_0–3, equal volume split)
+**Why it is always solvable, and how it is solved.** The vanilla lengths always satisfy the constraints, because $d_{ip}+d_{ir} \ge \lVert\mathbf p_p-\mathbf p_r\rVert$ by the triangle inequality through $\mathbf c_i$. The problem is a small convex QP per body (at most a few dozen variables).
+- **Two throats:** closed form.
+- **Three or more throats** (`_chord_bounded_lengths`): SLSQP started from the vanilla lengths. Its result is then made **exactly** feasible by moving it towards the vanilla lengths just far enough. The feasible set is convex and contains the vanilla lengths, so this keeps every bound.
 
-Mean relative error vs TauFactor (MAE in brackets). $T_I$ is defined in §6.1.
+> [!NOTE]
+> Throat pairs of an **inlet/outlet** body are not chord-bounded. Current passing from one throat to another through a Dirichlet node goes through the equipotential electrode, which is a real short circuit.
 
-| Variant | $1/F$ | $\tau_c$ (Berg) | $T_I$ (current-weighted) | $1/C_c$ | Fallback throats |
-| :--- | ---: | ---: | ---: | ---: | ---: |
-| vanilla | $-38.6\%$ (38.6) | $+30.2\%$ | $+23.9\%$ | $+7.7\%$ (7.8) | 531 |
-| **short_circuit (shipped)** | **$-8.4\%$ (8.4)** | **$+3.2\%$** | **$-1.0\%$** | **$+1.0\%$ (4.4)** | **455** |
-| plane rule only | $-35.6\%$ | $+25.5\%$ | $+19.2\%$ | $+5.0\%$ | 530 |
-| chord rule only | $-13.9\%$ | $+8.3\%$ | $+3.6\%$ | $+4.4\%$ | 458 |
-| $w_{pr} = 1$ | $+4.1\%$ (5.5) | $-3.3\%$ | $-7.8\%$ | $+0.7\%$ | 441 |
-| $w_{pr} = A_{t,r}$ | $-0.5\%$ (4.0) | $-1.5\%$ | $-5.8\%$ | $-0.1\%$ | 448 |
-| $w_{pr} = \lvert\Delta x_{pr}\rvert + 0.5$ | $-6.8\%$ | $+2.5\%$ | $-1.8\%$ | $+1.3\%$ | 452 |
-| clip at $0$ / $0.5$ | unchanged | unchanged | unchanged | $\pm 0.4\%$ | 455 |
-| pure axial projection (lower bound) | $+34.3\%$ | $-19.7\%$ | $-20.7\%$ | $-10.4\%$ | 272 |
+The Berg effective geometry ($\alpha$-formula, `RATIO_THRESHOLD`, uniform-pipe fallback) is then built exactly as before, on the new lengths.
 
-> [!TIP]
-> **What the ablation shows**
-> 1. **The interior chord rule does most of the work** ($-38.6\% \to -13.9\%$ on its own). The plane rule adds the last $\sim5$ points.
-> 2. **The clip never binds:** $\le 2$ of $\sim1{,}400$ half-links hit $0.25$. Mean shortening factor: $0.77$ interior, $0.75$ boundary.
-> 3. **I didn't pick the variant with the best $1/F$.** $w_{pr} = A_{t,r}$ gives $-0.5\%$, but only because paths become too short ($T_I$ $-5.8\%$): a constriction error compensated by a tortuosity error. The shipped $A_{t,r}(\lvert\Delta x\rvert + 0.5)$ weighting is the one whose **paths** match TauFactor's flux-weighted tortuosity ($T_I$ $-1\%$), which is the quantity the short-circuit is meant to correct.
-> 4. The pure axial projection overshoots massively. Real streamlines do move transversely inside bodies.
+### 3.3 Checks (Fine_0, equal volume split)
+
+| Check | Result |
+| :--- | :--- |
+| Interior throat pairs below the chord | **$0$ of $3{,}886$** (smallest ratio $1.000000$) |
+| Half-links longer than vanilla | **$0$** |
+| Two-throat bodies: $(\tilde d_{i1}+\tilde d_{i2})/\text{chord}$ | **$1.0000$** (median) |
+| Streamtube current through a body on a path shorter than its chord | **$0\%$** |
+| Current-weighted path/chord through interior bodies, $\lambda$ | vanilla $1.270 \to$ **$1.171$** |
+| Run time of `compute_short_circuit_distances` | $0.13\text{ s}$ |
+
+| Rule | Pairs below chord | Pairs above vanilla | $1/F$ (TF $0.1817$) | $T_I$ (TF $1.272$) | Status |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| vanilla (centroid route) | $0$ | — | 0.1047 ($-42.4\%$) | 1.591 | baseline |
+| weighted ratio $\tilde d = \rho_p d$ | $1{,}841$ | $0$ | 0.1552 ($-14.6\%$) | 1.270 | superseded: **violates the chord bound** |
+| single junction per body | $0$ | — | 0.1099 ($-39.5\%$) | 1.503 | superseded: moved the centre, kept the full star detour |
+| **chord-bounded per throat (shipped)** | **$0$** | **$0$** | **0.1226 ($-32.5\%$)** | **1.438** | |
+
+> [!WARNING]
+> The weighted-ratio rule of the earlier report agreed with TauFactor much better on $1/F$. It did so by crediting current with paths through bodies shorter than the straight line between the throats, which is impossible. The shipped rule gives up that agreement to stay physically admissible.
 
 ---
 
 ## 4. Results on `TRACE_fine_test` (Testbench)
 
-Config: `min_throat_size=1`, `dilate_both`, `skip_surface_surface`, `vox_projection`, $\alpha = 0.5$, `split_volume_equal=True`, `flow_decomposition` (your cached `version9`). TauFactor values come from the cached runs. Fine_4 has no TauFactor cached in `TRACE_fine_test`; it is covered in §5.
+Config: `min_throat_size=1`, `dilate_both`, `skip_surface_surface`, `vox_projection`, $\alpha = 0.5$, `split_volume_equal=True`, `flow_decomposition` (your cached `version9`). TauFactor values come from the cached runs; Fine_4 is covered in §5.
 
 | Microstructure & TauFactor reference | Variant | Solved $1/F$ (rel. err) | $\tau_c$ Berg (rel. err) | $T_I$ (rel. err) | $1/C_c$ (rel. err) | Fallback |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: |
 | **Fine_0** | vanilla | 0.1047 ($-42.4\%$) | 1.658 ($+30.3\%$) | 1.591 ($+25.1\%$) | 0.630 ($-0.1\%$) | 483 |
-| $D^{\text{TF}} = 0.1817,\ \tau^{\text{TF}} = 1.272,\ C^{\text{TF}} = 0.631$ | **short_circuit** | **0.1552 ($-14.6\%$)** | **1.314 ($+3.3\%$)** | **1.270 ($-0.2\%$)** | **0.587 ($-6.9\%$)** | **411** |
+| $D^{\text{TF}} = 0.1817,\ \tau^{\text{TF}} = 1.272,\ C^{\text{TF}} = 0.631$ | **short_circuit** | **0.1226 ($-32.5\%$)** | **1.492 ($+17.2\%$)** | **1.437 ($+13.0\%$)** | **0.597 ($-5.3\%$)** | **453** |
 | **Fine_1** | vanilla | 0.0922 ($-40.3\%$) | 1.701 ($+31.3\%$) | 1.625 ($+25.4\%$) | 0.656 ($+7.5\%$) | 528 |
-| $D^{\text{TF}} = 0.1544,\ \tau^{\text{TF}} = 1.296,\ C^{\text{TF}} = 0.610$ | **short_circuit** | **0.1406 ($-8.9\%$)** | **1.341 ($+3.5\%$)** | **1.290 ($-0.5\%$)** | **0.622 ($+1.9\%$)** | **471** |
+| $D^{\text{TF}} = 0.1544,\ \tau^{\text{TF}} = 1.296,\ C^{\text{TF}} = 0.610$ | **short_circuit** | **0.1106 ($-28.4\%$)** | **1.525 ($+17.7\%$)** | **1.456 ($+12.4\%$)** | **0.632 ($+3.6\%$)** | **496** |
 | **Fine_2** | vanilla | 0.0745 ($-33.8\%$) | 1.753 ($+29.6\%$) | 1.661 ($+22.8\%$) | 0.589 ($+15.1\%$) | 552 |
-| $D^{\text{TF}} = 0.1126,\ \tau^{\text{TF}} = 1.353,\ C^{\text{TF}} = 0.511$ | **short_circuit** | **0.1109 ($-1.5\%$)** | **1.388 ($+2.6\%$)** | **1.328 ($-1.9\%$)** | **0.549 ($+7.5\%$)** | **464** |
+| $D^{\text{TF}} = 0.1126,\ \tau^{\text{TF}} = 1.353,\ C^{\text{TF}} = 0.511$ | **short_circuit** | **0.0868 ($-22.9\%$)** | **1.585 ($+17.1\%$)** | **1.512 ($+11.7\%$)** | **0.560 ($+9.5\%$)** | **514** |
 | **Fine_3** | vanilla | 0.0735 ($-38.1\%$) | 1.746 ($+29.8\%$) | 1.647 ($+22.4\%$) | 0.602 ($+8.3\%$) | 561 |
-| $D^{\text{TF}} = 0.1187,\ \tau^{\text{TF}} = 1.345,\ C^{\text{TF}} = 0.556$ | **short_circuit** | **0.1086 ($-8.5\%$)** | **1.391 ($+3.4\%$)** | **1.324 ($-1.6\%$)** | **0.564 ($+1.5\%$)** | **475** |
-
-These match the previous report's "1-Pass Geometric SC" rows to the third decimal. The small differences come from using the exact `get_inlet_outlet_indices` thresholds for the plane rule.
+| $D^{\text{TF}} = 0.1187,\ \tau^{\text{TF}} = 1.345,\ C^{\text{TF}} = 0.556$ | **short_circuit** | **0.0867 ($-27.0\%$)** | **1.575 ($+17.1\%$)** | **1.488 ($+10.6\%$)** | **0.578 ($+4.0\%$)** | **521** |
 
 ---
 
-## 5. Results on `data_new` (25 Samples)
+## 5. Results on the 10 Fine Samples of `data_new`
 
-TauFactor references come from `data_new/all_runs_versions.csv` (latest version per sample). Same berg_cc config as §4. All 25 samples ran with no errors in all four variants, in about $40\text{ s}$ wall time per variant for the whole set (6 in parallel).
+TauFactor references come from `data_new/all_runs_versions.csv` (latest version per sample). Same berg_cc config as §4. All 10 samples ran with no errors.
 
-### 5.1 Per class
+### 5.1 Summary
 
-Geometric-mean ratio $\dfrac{1/F_{\text{RN}}}{D^{\text{TF}}}$; arithmetic mean of the $T_I$ error.
-
-| Class | Variant | $\dfrac{1/F_{\text{RN}}}{D^{\text{TF}}}$ | $T_I$ error | Fallback throats | Mean TF $C$ | Mean bodies |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: |
-| **Fine (10)** | vanilla | 0.618 | $+24.3\%$ | 68% | 0.570 | 357 |
-| | **short_circuit** | **0.934** | **$-1.2\%$** | **58%** | | |
-| **Medium (10)** | vanilla | 0.968 | $+12.1\%$ | 56% | 0.231 | 476 |
-| | short_circuit | 1.397 | $-10.7\%$ | 46% | | |
-| **Coarse (5)** | vanilla | 1.620 | $+8.5\%$ | 59% | 0.033 | 144 |
-| | short_circuit | 2.282 | $-14.4\%$ | 48% | | |
+| Variant | $\dfrac{1/F_{\text{RN}}}{D^{\text{TF}}}$ (geo. mean) | Range | Mean $\lvert$error$\rvert$ | $T_I$ error | $\tau_{c,B}$ error | Fallback throats |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| vanilla | 0.618 | 0.576 – 0.662 | $38.1\%$ | $+24.3\%$ | $+30.7\%$ | 68% |
+| **short_circuit** | **0.731** | **0.675 – 0.771** | **$26.8\%$** | **$+12.2\%$** | **$+17.7\%$** | **64%** |
 
 ### 5.2 Per sample
 
-| Sample | TF $D_{\text{eff}}$ | Vanilla $1/F$ | Short-circuit $1/F$ | $T_I$ err (van) | $T_I$ err (SC) | TF $C$ | $1/C_c$ (van) | $1/C_c$ (SC) | $\phi_c/\varepsilon$ |
-| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Coarse 0 | 0.0038 | 0.0061 ($+60\%$) | 0.0087 ($+127\%$) | $+12.6\%$ | $-11.9\%$ | 0.039 | 0.192 | 0.166 | 0.52 |
-| Coarse 1 | 0.0024 | 0.0042 ($+73\%$) | 0.0055 ($+128\%$) | $+4.5\%$ | $-12.6\%$ | 0.018 | 0.129 | 0.112 | 0.52 |
-| Coarse 2 | 0.0026 | 0.0035 ($+32\%$) | 0.0053 ($+101\%$) | $+17.5\%$ | $-12.3\%$ | 0.054 | 0.289 | 0.245 | 0.37 |
-| Coarse 7 | 0.0040 | 0.0059 ($+48\%$) | 0.0081 ($+105\%$) | $+11.8\%$ | $-14.2\%$ | 0.038 | 0.185 | 0.148 | 0.43 |
-| Coarse 9 | 0.0006 | 0.0013 ($+106\%$) | 0.0018 ($+190\%$) | $-3.8\%$ | $-21.1\%$ | 0.018 | 0.175 | 0.165 | 0.20 |
-| Fine 0 | 0.1817 | 0.1047 ($-42\%$) | **0.1552 ($-15\%$)** | $+25.1\%$ | **$-0.2\%$** | 0.631 | 0.630 | 0.587 | 0.98 |
-| Fine 1 | 0.1544 | 0.0922 ($-40\%$) | **0.1406 ($-9\%$)** | $+25.4\%$ | **$-0.5\%$** | 0.610 | 0.656 | 0.622 | 0.96 |
-| Fine 2 | 0.1126 | 0.0745 ($-34\%$) | **0.1109 ($-1\%$)** | $+22.8\%$ | **$-1.9\%$** | 0.511 | 0.589 | 0.549 | 0.96 |
-| Fine 3 | 0.1187 | 0.0735 ($-38\%$) | **0.1086 ($-8\%$)** | $+22.4\%$ | **$-1.6\%$** | 0.556 | 0.602 | 0.564 | 0.96 |
-| Fine 4 | 0.1498 | 0.0899 ($-40\%$) | **0.1363 ($-9\%$)** | $+26.6\%$ | **$+0.7\%$** | 0.597 | 0.646 | 0.608 | 0.99 |
-| Fine 5 | 0.1258 | 0.0788 ($-37\%$) | **0.1213 ($-4\%$)** | $+25.5\%$ | **$-1.5\%$** | 0.564 | 0.639 | 0.601 | 0.95 |
-| Fine 6 | 0.1407 | 0.0870 ($-38\%$) | **0.1333 ($-5\%$)** | $+24.8\%$ | **$-0.7\%$** | 0.575 | 0.634 | 0.602 | 0.98 |
-| Fine 7 | 0.1191 | 0.0767 ($-36\%$) | **0.1154 ($-3\%$)** | $+22.0\%$ | **$-3.3\%$** | 0.555 | 0.597 | 0.560 | 0.97 |
-| Fine 8 | 0.1198 | 0.0756 ($-37\%$) | **0.1181 ($-1\%$)** | $+25.5\%$ | **$-1.5\%$** | 0.536 | 0.621 | 0.589 | 0.96 |
-| Fine 9 | 0.1254 | 0.0768 ($-39\%$) | **0.1140 ($-9\%$)** | $+22.7\%$ | **$-1.2\%$** | 0.566 | 0.610 | 0.580 | 0.95 |
-| Medium 0 | 0.0749 | 0.0554 ($-26\%$) | 0.0807 ($+8\%$) | $+21.0\%$ | $-3.8\%$ | 0.351 | 0.479 | 0.438 | 0.91 |
-| Medium 1 | 0.0395 | 0.0375 ($-5\%$) | 0.0534 ($+35\%$) | $+12.0\%$ | $-10.1\%$ | 0.224 | 0.381 | 0.340 | 0.82 |
-| Medium 2 | 0.0257 | 0.0247 ($-4\%$) | 0.0364 ($+41\%$) | $+10.3\%$ | $-13.1\%$ | 0.208 | 0.375 | 0.339 | 0.75 |
-| Medium 3 | 0.1181 | 0.0808 ($-32\%$) | 0.1167 ($-1\%$) | $+19.9\%$ | $-3.0\%$ | 0.445 | 0.526 | 0.488 | 0.91 |
-| Medium 4 | 0.0255 | 0.0240 ($-6\%$) | 0.0345 ($+36\%$) | $+8.6\%$ | $-13.3\%$ | 0.191 | 0.311 | 0.283 | 0.81 |
-| Medium 5 | 0.0251 | 0.0279 ($+11\%$) | 0.0406 ($+62\%$) | $+8.5\%$ | $-14.1\%$ | 0.163 | 0.305 | 0.285 | 0.81 |
-| Medium 6 | 0.0208 | 0.0236 ($+14\%$) | 0.0332 ($+60\%$) | $+8.0\%$ | $-13.6\%$ | 0.178 | 0.337 | 0.298 | 0.79 |
-| Medium 7 | 0.0359 | 0.0326 ($-9\%$) | 0.0467 ($+30\%$) | $+13.2\%$ | $-9.2\%$ | 0.241 | 0.363 | 0.326 | 0.87 |
-| Medium 8 | 0.0165 | 0.0211 ($+27\%$) | 0.0311 ($+88\%$) | $+10.1\%$ | $-13.6\%$ | 0.128 | 0.284 | 0.258 | 0.76 |
-| Medium 9 | 0.0271 | 0.0309 ($+14\%$) | 0.0439 ($+62\%$) | $+9.0\%$ | $-13.0\%$ | 0.179 | 0.353 | 0.308 | 0.81 |
+| Sample | TF $D_{\text{eff}}$ | TF $\tau$ | TF $C$ | Vanilla $1/F$ | Short-circuit $1/F$ | $T_I$ err (van) | $T_I$ err (SC) | $1/C_c$ (van) | $1/C_c$ (SC) | Fallback (van / SC) |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Fine 0 | 0.1817 | 1.272 | 0.631 | 0.1047 ($-42\%$) | **0.1226 ($-33\%$)** | $+25.1\%$ | **$+13.0\%$** | 0.630 | 0.597 | 483 / 453 |
+| Fine 1 | 0.1544 | 1.296 | 0.610 | 0.0922 ($-40\%$) | **0.1106 ($-28\%$)** | $+25.4\%$ | **$+12.4\%$** | 0.656 | 0.632 | 528 / 496 |
+| Fine 2 | 0.1126 | 1.353 | 0.511 | 0.0745 ($-34\%$) | **0.0868 ($-23\%$)** | $+22.8\%$ | **$+11.7\%$** | 0.589 | 0.560 | 552 / 514 |
+| Fine 3 | 0.1187 | 1.345 | 0.556 | 0.0735 ($-38\%$) | **0.0867 ($-27\%$)** | $+22.4\%$ | **$+10.6\%$** | 0.602 | 0.578 | 561 / 521 |
+| Fine 4 | 0.1498 | 1.306 | 0.597 | 0.0899 ($-40\%$) | **0.1071 ($-29\%$)** | $+26.6\%$ | **$+14.7\%$** | 0.646 | 0.625 | 542 / 515 |
+| Fine 5 | 0.1258 | 1.321 | 0.564 | 0.0788 ($-37\%$) | **0.0952 ($-24\%$)** | $+25.5\%$ | **$+11.3\%$** | 0.639 | 0.613 | 527 / 480 |
+| Fine 6 | 0.1407 | 1.305 | 0.575 | 0.0870 ($-38\%$) | **0.1028 ($-27\%$)** | $+24.8\%$ | **$+13.6\%$** | 0.634 | 0.617 | 544 / 513 |
+| Fine 7 | 0.1191 | 1.367 | 0.555 | 0.0767 ($-36\%$) | **0.0906 ($-24\%$)** | $+22.0\%$ | **$+9.7\%$** | 0.597 | 0.566 | 522 / 499 |
+| Fine 8 | 0.1198 | 1.340 | 0.536 | 0.0756 ($-37\%$) | **0.0900 ($-25\%$)** | $+25.5\%$ | **$+13.2\%$** | 0.621 | 0.594 | 504 / 469 |
+| Fine 9 | 0.1254 | 1.360 | 0.566 | 0.0768 ($-39\%$) | **0.0889 ($-29\%$)** | $+22.7\%$ | **$+11.8\%$** | 0.610 | 0.582 | 545 / 515 |
 
-> [!NOTE]
-> Medium_0 and Medium_3 have the highest TauFactor constrictivity of their class ($C^{\text{TF}} \approx 0.35$ and $0.45$), and they behave like Fine samples (short-circuit $1/F$ within $8\%$). The split is about **how constricted the pore space is**, not about the class label.
+The improvement is uniform: every sample gains $11\text{–}19$ points of $1/F$ and halves its $T_I$ error.
 
 ---
 
@@ -268,7 +263,7 @@ $$
 \quad \text{(over pore voxels)} .
 $$
 
-For a field split into streamtubes $\Gamma$ carrying current $I_\Gamma$ along length $L_\Gamma$, $\int \lvert\mathbf{J}\rvert\, dV = \sum_\Gamma I_\Gamma L_\Gamma$ and $\int J_x\, dV = \sum_\Gamma I_\Gamma\, \Delta s$. So $\tau^{\text{TF}}$ is the **current-weighted mean of $L_\Gamma / \Delta s$**. The like-for-like network quantity, reported by the testbench, is
+For a field split into streamtubes $\Gamma$ carrying current $I_\Gamma$ along length $L_\Gamma$, $\int \lvert\mathbf{J}\rvert\, dV = \sum_\Gamma I_\Gamma L_\Gamma$ and $\int J_x\, dV = \sum_\Gamma I_\Gamma\, \Delta s$. So $\tau^{\text{TF}}$ is the **current-weighted mean of $L_\Gamma / \Delta s$**. The like-for-like network quantity is
 
 $$
 T_I = \frac{\sum_\Gamma I_\Gamma L_\Gamma}{I_{\text{tot}}\, \Delta s} .
@@ -281,16 +276,10 @@ $$
 \qquad \tau_{c,B} \equiv \left(\tau_c^{2}\right)^{-1/2} \ge T_I ,
 $$
 
-since volume weighting emphasises slow, long tubes. The gap is $+3\text{–}5\%$ on Fine and $+6\text{–}13\%$ on Medium/Coarse (e.g. Coarse_0 SC: $1.631$ vs $1.444$), where path lengths are more widely spread. Comparing $\tau_c$ directly with $\tau^{\text{TF}}$ therefore mixes a definitional offset into the error.
+since volume weighting emphasises slow, long tubes. On Fine media $\tau_{c,B}$ is $\approx 5\%$ above $T_I$ (Fine_0: $1.492$ vs $1.437$). Comparing $\tau_c$ directly with $\tau^{\text{TF}}$ therefore mixes a definitional offset into the error.
 
 #### Constrictivity: total vs conducting porosity
-TauFactor's constrictivity is defined to close
-
-$$
-D^{\text{TF}} = \frac{\varepsilon\, C^{\text{TF}}}{\left(\tau^{\text{TF}}\right)^{2}}
-$$
-
-with the **total** porosity $\varepsilon$, so it absorbs everything not explained by $\tau^{\text{TF}}$, including dead-end and non-conducting pore volume. Berg's $1/C_c$ closes $1/F = \phi_c\, \tau_c^2 / C_c$ with the **conducting** porosity $\phi_c$. The two agree only when $\phi_c \approx \varepsilon$: true for Fine ($0.97$), not for Medium ($0.82$) or Coarse ($0.39$).
+TauFactor's constrictivity is defined to close $D^{\text{TF}} = \varepsilon\, C^{\text{TF}} / (\tau^{\text{TF}})^{2}$ with the **total** porosity $\varepsilon$. Berg's $1/C_c$ closes $1/F = \phi_c\, \tau_c^2 / C_c$ with the **conducting** porosity $\phi_c$. On Fine media $\phi_c/\varepsilon = 0.97$, so the two are directly comparable.
 
 ### 6.2 An exact error budget
 
@@ -305,37 +294,44 @@ $$
 \;}
 $$
 
-The identity holds on every sample to $\le 0.5\%$. The residual comes from $\Omega_c$ being counted from streamtubes in one place and from currents in the other.
+The identity holds on every sample to $\le 10^{-4}$.
 
-| Class | Variant | $1/F$ ratio | $= \phi_c/\varepsilon$ | $\times$ constriction | $\times$ tortuosity |
-| :--- | :--- | ---: | ---: | ---: | ---: |
-| **Fine** | vanilla | 0.618 | 0.967 | 1.093 | **0.585** |
-| | short_circuit | **0.934** | 0.967 | 1.029 | **0.939** |
-| **Medium** | vanilla | 0.968 | 0.824 | **1.688** | **0.696** |
-| | short_circuit | 1.397 | 0.824 | 1.528 | 1.109 |
-| **Coarse** | vanilla | 1.620 | 0.386 | **6.172** | **0.679** |
-| | short_circuit | 2.282 | 0.386 | 5.334 | 1.108 |
+| Variant (10 Fine, geometric means) | $1/F$ ratio | $= \phi_c/\varepsilon$ | $\times$ constriction | $\times$ tortuosity |
+| :--- | ---: | ---: | ---: | ---: |
+| vanilla | 0.618 | 0.967 | 1.093 | **0.585** |
+| **short_circuit** | **0.731** | 0.967 | 1.047 | **0.722** |
 
-### 6.3 Fine media: only the geometry was wrong
+> [!IMPORTANT]
+> On Fine media the error is almost entirely **path length**. Porosity and constriction are within $5\%$ of TauFactor in both variants. The short circuit moves the tortuosity factor from $0.585$ to $0.722$; the rest of the gap is the next section.
 
-The vanilla error is almost entirely the tortuosity factor: $0.585 \approx 1/1.31^2$, as predicted in §3.1. Short-circuit moves it to $0.94$, and the constriction and porosity factors stay within a few percent of 1. The $-6.6\%$ average $1/F$ deficit that remains is split between:
+### 6.3 Where the remaining path-length error sits
 
-1. **the Berg $\tau_c$ definitional offset** (§6.1), which by itself costs $\approx (1/1.035)^2 \approx -7\%$. This is not a flaw in the paths: $T_I$ is within $1.2\%$;
-2. **$\phi_c/\varepsilon = 0.97$**: the RN counts $\sim3\%$ of the pore volume as non-conducting, while TauFactor's constrictivity absorbs that;
-3. **sample-to-sample constriction scatter** of $\pm7\%$ (Fine_0 $-7\%$, Fine_8 $+10\%$).
+Replace each streamtube's RN length by the **shortest length any network through throat centroids could give it**: straight lines from the inlet face to the first throat centroid, between consecutive throat centroids, and to the outlet face. Current-weighting these like $T_I$ gives $T_{\text{chord}}$, and the error splits **exactly** into two factors:
 
-A $\sim0.7\%$ systematic also comes from `delta_s = shape[axis] = 150`, while the RN's Dirichlet nodes sit at voxel centres $0$ and $149$. I left this unchanged so vanilla stays exact.
+$$
+\frac{T_I}{\tau^{\text{TF}}}
+= \underbrace{\frac{T_I}{T_{\text{chord}}}}_{\text{in-body excess over the chords}}
+\times \underbrace{\frac{T_{\text{chord}}}{\tau^{\text{TF}}}}_{\text{throat-centroid polyline vs real paths}} .
+$$
 
-### 6.4 Medium / Coarse: vanilla's agreement was a cancellation of errors
+| Variant (10 Fine, geometric means) | $T_I/\tau^{\text{TF}}$ | $=$ in-body excess $T_I/T_{\text{chord}}$ | $\times$ polyline $T_{\text{chord}}/\tau^{\text{TF}}$ |
+| :--- | ---: | ---: | ---: |
+| vanilla | 1.243 | **1.219** | 1.020 |
+| **short_circuit** | 1.122 | **1.101** | 1.019 |
 
-> [!WARNING]
-> For Medium, vanilla's $1/F$ ratio of $0.968$ looks good, but it is $0.824 \times 1.688 \times 0.696$: **paths $20\%$ too long cancel a constriction that is $69\%$ too weak.** For Coarse the constriction factor is $6.2\times$ and swamps everything. Short-circuit removes most of the tortuosity error, so the constriction error becomes visible. That is why short-circuit $1/F$ is worse there. No path-length model can fix a constriction error. Keeping vanilla because its Medium mean looks better would be tuning to the wrong physics.
+1. **The throat-centroid polyline is only $2\%$ longer than TauFactor's current paths.** Throat centroids are a good geometric input on Fine media. The small excess is current cutting across wide throats off-centre.
+2. **The in-body excess drops from $22\%$ to $10\%$.** The remaining $10\%$ is the cost of **one length per half-link**. A throat's half-link is shared by all pairs through that throat, so it must stay long enough for the pair that needs it most, even when the current uses another pair.
 
-Short-circuit also **over-shortens** paths in these samples: $T_I$ is $-11\%$ to $-14\%$ (tortuosity factor $1.11$). The chord between two throats is a lower bound on the streamline length only inside a **convex** body. In the larger, more irregular bodies of Medium/Coarse samples (Coarse: $144$ bodies per $150^3$ vs $\sim357$ for Fine), the chord can cut through solid. The truth lies between the star (vanilla, $+8\text{–}12\%$) and the chord (short-circuit, $-11\text{–}14\%$). This is a limit of the geometric heuristic: it uses no information about body shape.
+> [!NOTE]
+> **Example (Fine_0, body 201, $z = 4$; the guide's section 3).** $55\%$ of the streamtube current through this body goes T325 → T486, yet that pair is charged $1.39\times$ its chord. T486's half-link cannot shrink, because the pair T420 ↔ T486, which carries only $5.6\%$ of the current, is already exactly at its chord ($23.20$ vox).
+>
+> Removing this needs lengths that depend on the **pair**, not just on the throat. Two options:
+> - direct throat-to-throat links inside each body (each body becomes a small clique sharing its volume);
+> - a second pass that re-weights pairs by the solved current.
 
-### 6.5 Where the constriction is lost: link-level test against the TauFactor field
+### 6.4 Link-level test against the TauFactor field (Fine_0)
 
-To find **which** links are wrong, I compared every interior link's RN conductance $G^{\text{RN}}_{ij}$ with the conductance the TauFactor field gives it:
+Every interior link's RN conductance $G^{\text{RN}}_{ij}$ is compared with the conductance the TauFactor field gives it:
 
 $$
 I^{\text{TF}}_{ij} = \sum_{\text{faces } (u,v):\, u\in i,\ v\in j} (\phi_u - \phi_v), \qquad
@@ -343,69 +339,36 @@ I^{\text{TF}}_{ij} = \sum_{\text{faces } (u,v):\, u\in i,\ v\in j} (\phi_u - \ph
 G^{\text{TF}}_{ij} = \frac{I^{\text{TF}}_{ij}}{\Delta\Phi^{\text{TF}}_{ij}} ,
 $$
 
-with unit conductance per voxel face (the same normalisation as the RN with $\sigma = 1$) and $\bar\phi_i$ the body-mean potential. The decomposition is **power-exact**: by a discrete Green identity, $\sum_{\text{links}} I_{ij}\,\Delta\Phi_{ij}$ plus the Dirichlet-boundary terms equals the total dissipation, so no dissipation is hidden inside bodies. Ratios are aggregated as dissipation-weighted geometric means, $w_{ij} = I^{\text{TF}}_{ij}\,\Delta\Phi^{\text{TF}}_{ij} > 0$. TauFactor was solved on `body_array > 0`; Fine_0 uses the field cached in `TRACE_fine_test/.../version1`.
+with unit conductance per voxel face, $\bar\phi_i$ the body-mean potential, and dissipation-weighted geometric means ($w_{ij} = I^{\text{TF}}_{ij}\,\Delta\Phi^{\text{TF}}_{ij}$).
 
-| Sample (TF $C$) | Variant | $G^{\text{RN}}/G^{\text{TF}}$: all links | fallback links | Berg links | narrow ($\le 16$ faces) | wide ($> 16$ faces) | Dissipation share in narrow links |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Fine_0** (0.63) | vanilla | 0.47 | 0.39 | 0.82 | 1.38 | 0.44 | **5%** |
-| | short_circuit | 0.70 | 0.58 | 1.16 | 2.01 | 0.66 | |
-| **Medium_0** (0.35) | vanilla | 0.66 | 0.53 | 1.02 | 1.16 | 0.56 | **23%** |
-| | short_circuit | 0.96 | 0.73 | 1.30 | 1.57 | 0.82 | |
-| **Medium_8** (0.13) | vanilla | 1.15 | 0.52 | 1.51 | 2.17 | 0.70 | **44%** |
-| | short_circuit | 1.73 | 0.81 | 2.19 | 3.07 | 1.10 | |
-| **Coarse_0** (0.04) | vanilla | 1.21 | 1.16 | 1.23 | 2.28 | 1.01 | **22%** |
-| | short_circuit | 1.94 | 1.78 | 2.01 | 3.59 | 1.64 | |
-| **Coarse_9** (0.02) | vanilla | 2.63 | 7.83 | 2.24 | 2.23 | 3.79 | **69%** |
-| | short_circuit | 3.57 | 12.07 | 3.01 | 3.06 | 5.05 | |
+| Variant | $G^{\text{RN}}/G^{\text{TF}}$: all links | fallback links | Berg links | narrow ($\le 16$ faces) | wide ($> 16$ faces) | Dissipation in fallback / narrow links |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| vanilla | 0.47 | 0.39 | 0.82 | 1.38 | 0.44 | 77% / 5% |
+| **short_circuit** | **0.53** | **0.44** | **0.92** | 1.63 | **0.50** | 75% / 5% |
 
-Body-mean potentials are not exactly the RN's node potentials, so read these as **relative** comparisons. The "all links" level shouldn't be compared directly with the global $1/F$. The trends are robust, though:
+Body-mean potentials are not exactly the RN's node potentials, so read these as **relative** comparisons.
 
 > [!IMPORTANT]
-> 1. **Narrow necks are always over-conductive in the RN ($1.4\text{–}3.6\times$), and their share of the dissipation grows from $5\%$ (Fine) to $22\text{–}69\%$ (Medium_8, Coarse).** That is what turns a small, harmless bias in Fine media into a large $1/F$ overestimate in constricted media.
-> 2. In Fine media the opposite bias dominates: the uniform-pipe **fallback** links ($72\text{–}77\%$ of the dissipation) are **under**-conductive, and short-circuit partly corrects them, consistent with §6.3.
+> The wide, uniform-pipe **fallback** links carry three quarters of the dissipation and are the most under-conductive ($0.44$). Their pipe length is $\tilde d_{1k}+\tilde d_{2k}$, so the in-body excess of §6.3 shows up directly here. The narrow necks are over-conductive, but they carry only $5\%$ of the dissipation on Fine media, so they barely affect $1/F$. Vox-projection areas of narrow necks are $2\text{–}3\times$ the shared-face count, while current-weighted over the sample the excess is $\approx 0\%$ (`throat_faces.py`).
 
-Two mechanisms make narrow links too conductive, and both can be identified:
+### 6.5 Volume split (`split_volume_equal`)
 
-**(a) Area.** Compare the vox-projection area $A_t$ with the number of voxel faces $n_f$ the two bodies actually share (the cross-section a finite-volume solve conducts through):
+| Variant (10 Fine) | $1/F$ ratio | $T_I$ error | Constriction factor | Fallback |
+| :--- | ---: | ---: | ---: | ---: |
+| vanilla, equal split | 0.618 | $+24.3\%$ | 1.093 | 68% |
+| **short_circuit, equal split** | **0.731** | **$+12.2\%$** | 1.047 | 64% |
+| vanilla, area-weighted | 0.572 | $+27.1\%$ | 1.028 | 94% |
+| short_circuit, area-weighted | 0.682 | $+15.3\%$ | 0.999 | 90% |
 
-| Class | Median $A_t/n_f$ | Current-weighted $A_t/n_f$ | $n_f \le 4$ | $5 \le n_f \le 16$ | $17 \le n_f \le 64$ | $n_f > 64$ |
-| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Fine | 0.88 | 1.00 | 2.96 | 1.49 | 0.99 | 0.79 |
-| Medium | 0.97 | 1.09 | 2.00 | 1.40 | 0.98 | 0.80 |
-| Coarse | 0.96 | 1.07 | 2.04 | 1.40 | 0.99 | 0.77 |
+With $V_{ik}\propto A_{t,k}$ the objective weights large throats' half-links less ($1/V_{ik}$), and $90\%$ of throats fall back to the uniform pipe. Keep `split_volume_equal=True` (the default).
 
-Narrow necks get $2\text{–}3\times$ too much area, but weighted by current the excess over a whole sample is only $0\text{–}9\%$. So area alone cannot explain a $2\text{–}5\times$ constriction miss; its correlation with the constriction factor across the 25 samples is $r = 0.46$.
-
-**(b) Constriction scaling.** In the Berg segment model, the throat resistance per side is
-
-$$
-R_{t,i} = \frac{\alpha\, d_{ik}}{\sigma \sqrt{A_{ik} A_{t}}} \quad\Longrightarrow\quad G \propto \sqrt{A_t} .
-$$
-
-That is the right scaling for a short **orifice** in a wide body. The Holm/Maxwell spreading resistance $R \approx 1/(4\sigma a)$ per side, with $a = \sqrt{A_t/\pi}$, matches the Berg term to within $\sim10\%$ for compact bodies ($d_{ik} \approx \sqrt{A_{ik}}$). It is too weak for a **channel-like** neck, whose resistance scales as $\ell / (\sigma A_t)$. Near the percolation threshold (Coarse: $D_{\text{eff}} \sim 10^{-3}$, $\tau_{\text{solver}}$ up to $210$) transport runs through such necks.
-
-> [!NOTE]
-> (b) is my physical interpretation, not a measured separation. It is consistent with the area-weighted volume split, where a link's conductance scales $\propto A_t$ through its volume share, cutting the Coarse constriction factor from $5.3$ to $2.1$ (§6.6).
-
-### 6.6 Volume split (`split_volume_equal`)
-
-| Class | Short-circuit, equal split: $1/F$ ratio | (constriction factor) | Short-circuit, area-weighted: $1/F$ ratio | (constriction factor) | Area-weighted fallback |
-| :--- | ---: | ---: | ---: | ---: | ---: |
-| Fine | 0.934 | 1.03 | 0.883 | 1.00 | 82% |
-| Medium | 1.397 | 1.53 | 1.135 | 1.23 | 65% |
-| Coarse | 2.282 | 5.33 | **0.989** | 2.13 | 62% |
-
-The area-weighted split looks much better on Coarse $1/F$, but it still carries a $2.1\times$ constriction error. The over-shortened paths ($1.13$) and the porosity factor ($0.41$) happen to cancel it. It also sends $82\%$ of Fine throats into the fallback.
-
-> [!TIP]
-> I left the default at `split_volume_equal=True`. Choosing the split per microstructure class would be tuning, not physics. A single change that targets the real problem is the constriction law for narrow necks (§6.5).
-
-### 6.7 Smaller effects
+### 6.6 Smaller effects
 
 | Effect | Size | Comment |
 | :--- | ---: | :--- |
-| TauFactor reference itself | $0\text{–}9\%$ in $D_{\text{eff}}$ | My re-solves on `body_array > 0` vs the CSV runs (`segmented_percolated.npy`, different convergence), e.g. Coarse_0: $0.00417$ vs $0.00384$ |
-| Network porosity $\Omega/V$ vs $\varepsilon$ | $\le 0.2\%$ (Fine), $\le 5\%$ (Coarse_9) | `body_array` and the percolated segmentation differ slightly |
+| Berg $\tau_{c,B}$ vs $T_I$ | $\approx (1/1.05)^2 \approx -9\%$ on $1/F$ | Definitional (§6.1); not a path error |
+| $\phi_c/\varepsilon$ | $0.97$ | $\sim3\%$ of the pore volume carries no current in the RN |
+| TauFactor reference itself | $0\text{–}9\%$ in $D_{\text{eff}}$ | Re-solves on `body_array > 0` vs the CSV runs |
 | $\Delta s = 150$ vs node spacing $149$ | $\approx 0.7\%$ | Kept so vanilla stays exact |
 
 ---
@@ -414,12 +377,13 @@ The area-weighted split looks much better on Coarse $1/F$, but it still carries 
 
 | Item | Status |
 | :--- | :--- |
-| 2-pass streamtube re-solve (previous report, Method 2) | Not implemented. That report found it worse than the 1-pass rule on Fine_0–3, and a geometry-only rule avoids an extra solve |
+| Pair-dependent lengths (throat-to-throat links inside bodies, or a current-weighted second pass) | **Not implemented.** §6.3 identifies this as what removes the remaining $\approx 10\%$ path excess; it changes the network topology or needs a second solve |
+| Medium / Coarse media | Out of scope from this revision. The earlier analysis (constriction-dominated errors) is in git history |
+| Earlier short-circuit rules | Removed: weighted ratio (violated the chord bound for $47\%$ of pairs) and single junction. Results in `rn_testbench/results/*_v1` and `*_junction` |
 | Cauchy area | Not used, as you asked. Everything here is `vox_projection` |
-| Previous report §4.1: possible infinite loop in `_flow_decomposition` | Not fixed (outside this change). `flow_decomposition` terminated on all $25 + 5$ samples here |
+| Previous report §4.1: possible infinite loop in `_flow_decomposition` | Not fixed (outside this change). It terminated on every sample here |
 | Previous report §4.3: a body touching both faces is neither inlet nor outlet | Not fixed (outside this change) |
-| Short-circuit constants (weights, $+0.5$ offset, clip $0.25$, plane floor $0.5$) | Heuristic. §3.3 shows the clip and floor don't matter; the weighting does, and it was chosen to match the flux-weighted tortuosity, **not** $1/F$ |
-| Merging | Behaviour unchanged; it is now called from inside extraction |
+| Short-circuit constants | Only the $0.5$-voxel lower bound on a length (never above vanilla) |
 
 ---
 
@@ -431,13 +395,13 @@ Everything is in [`rn_testbench/`](rn_testbench/). Run with `/Users/rochan/minic
 | :--- | :--- | :--- |
 | `bench.py <module_dir> <sample_dir> <out.pkl> rn_method=… split_volume_equal=…` | Stage-timed run of the whole berg_cc path; saves every intermediate | §2, §4, §5 |
 | `compare.py base.pkl new.pkl` | Bit-level equivalence report | §2 |
-| `run_variants.sh <data_root> <tag> key=val…` | Runs `bench.py` over every sample folder | §4, §5 |
+| `run_variants.sh <data_root> <tag> key=val…` | Runs `bench.py` over every sample folder (for Fine only, point it at a folder of links to `data_new/Fine_*`) | §4, §5 |
 | `table.py`, `budget.py` (+ `cache_lookup.py`) | Tables vs TauFactor and the exact error budget | §4–§6.2 |
-| `ablation.py` | Ablation and sensitivity | §3.3 |
+| `ablation.py` | Ablation of the superseded weighted-ratio rule (historical) | — |
 | `throat_faces.py` | Vox-projection area vs shared-face count | §6.5 (a) |
 | `run_tf.py`, `link_conductance.py` | TauFactor field + link-level conductance test | §6.5 |
 
-`results/` holds the JSON outputs, the budget CSVs for all four `data_new` variants, and the baseline/new timing JSONs.
+`results/` holds the JSON outputs and budget CSVs (`new_van`, `new_sc_eq`, `new_sc_aw` are current; `*_v1` and `*_junction` are the superseded rules), plus the baseline/new timing JSONs. The $T_{\text{chord}}$ decomposition (§6.3) re-walks each streamtube's throat sequence. The page `berg_network_formation_guide.html` (built by `build_guide.py`) shows it, and every other Fine_0 number here, interactively.
 
 To regenerate the baseline, point `bench.py` at a checkout of `origin/main` (commit `78c06de`, the parent of the speedup commit on the `short_circuit` branch). Its code is the pre-change version used for every "baseline" number here:
 

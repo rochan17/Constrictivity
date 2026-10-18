@@ -59,7 +59,8 @@ Key improvements over the original
 
 11. Two resistor-network variants via `rn_method` in
     calculate_network_effective_properties: 'vanilla' (original centroid
-    star) and 'short_circuit' (shortened half-link lengths, see
+    star) and 'short_circuit' (half-links shortened so every throat-to-
+    throat path lies between its chord and its centroid route, see
     compute_short_circuit_distances). DEFAULT_RN_METHOD selects the default.
 
 12. extract_throats_from_bodies_voxel_parallel(merge_bodies=True) runs the
@@ -138,18 +139,19 @@ RATIO_THRESHOLD = 1
 # calculate_network_effective_properties (see its docstring):
 #   'vanilla'       -- d_itk = |throat centroid - body centroid| (original
 #                      Berg star geometry; every path detours via centroids)
-#   'short_circuit' -- d_itk shortened before the solve: throat-to-inlet/
-#                      outlet-plane distance for Dirichlet bodies, weighted
-#                      throat-to-throat chords for interior bodies.
-# Flip DEFAULT_RN_METHOD to 'vanilla' to revert every caller that does not
-# pass rn_method explicitly (pipeline.py records the resolved value in the
-# berg_cc config, so the two variants are cached as separate versions).
+#   'short_circuit' -- each d_itk shortened along its own ray to the centroid
+#                      to the least-resistance lengths with
+#                      chord_pr <= d_ip + d_ir <= vanilla d_ip + d_ir for
+#                      every throat pair (inlet/outlet bodies: distance
+#                      from the face plane).
+# DEFAULT_RN_METHOD applies to every caller that does not pass rn_method
+# explicitly; set it to 'short_circuit' to switch them all (pipeline.py
+# records the resolved value in the berg_cc config, so the two variants are
+# cached as separate versions).
 RN_METHODS = ('vanilla', 'short_circuit')
-DEFAULT_RN_METHOD = 'short_circuit'
-# Interior-body shortening factor is clipped to [SC_MIN_RATIO, 1].
-SC_MIN_RATIO = 0.25
-# Floor on the plane-to-throat distance of inlet/outlet bodies [voxels].
-SC_MIN_PLANE_DISTANCE = 0.5
+DEFAULT_RN_METHOD = 'vanilla'
+# Floor on short-circuit half-link lengths [voxels] (never above vanilla d).
+SC_MIN_HUB_DISTANCE = 0.5
 
 # 8 corner offsets of a unit voxel, used by the voxel-projection area method.
 _CUBE_CORNERS = np.array(
@@ -1601,38 +1603,46 @@ def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA, d_overrid
     }
 
 
-def compute_short_circuit_distances(network, axis=None, area_method='vox_projection'):
+def compute_short_circuit_distances(network, axis=None, area_method='vox_projection',
+                                    split_volume_equal=True):
     """
     Short-circuited half-link lengths d~_ik for rn_method='short_circuit'.
 
     In the vanilla RN every half-link runs from the body centroid c_i to the
-    throat centroid p_k, so current crossing body i from throat p to throat
-    r is charged the "star" length |p_p - c_i| + |c_i - p_r| instead of
-    something close to the chord |p_p - p_r|. Because the half-link volume
-    V_ik is fixed, its conductance is sigma * V_ik / d_ik^2, so a path that
-    is lambda times too long is lambda^2 times too resistive.
+    throat centroid p_k (d_ik = |p_k - c_i|), so current crossing body i from
+    throat p to throat r is charged d_ip + d_ir, the route through the
+    centroid. The shortest possible route is the chord |p_p - p_r|. Because
+    V_ik is fixed, G = sigma * V_ik / d_ik^2, so a path lambda times too long
+    is lambda^2 times too resistive.
 
-    Rules (lengths in voxels, flow axis = `axis`):
+    The centroid stays where it is; each half-link is only shortened along
+    its own ray, and every throat pair keeps a path between its chord and its
+    centroid route:
 
-    * Inlet / outlet bodies (is_surface and centroid on the inlet/outlet
-      plane, same test as berg_cc.get_inlet_outlet_indices): the whole
-      contact face is one Dirichlet equipotential, so current leaves the
-      plane perpendicular to it. d~_ik = min(d_ik, max(|p_k[axis] - plane|,
-      SC_MIN_PLANE_DISTANCE)) -- the transverse offset between the face's
-      centroid and the throat is dropped.
+        |p_p - p_r|  <=  d~_ip + d~_ir  <=  d_ip + d_ir      for all p != r.
 
-    * Interior bodies with >= 2 throats: throat p is paired with every other
-      throat r of the same body, weighted by w_pr = A_r * (|dx_pr| + 0.5) (a
-      geometry-only proxy for how much current p exchanges with r: larger,
-      and more axially separated, throats carry more of it). Then
-          ratio_p = sum_r w_pr min(chord_pr, star_pr) / sum_r w_pr star_pr
-          d~_ip   = d_ip * clip(ratio_p, SC_MIN_RATIO, 1)
-      so a path p -> r through the body has length ~ chord_pr when the
-      ratios of p and r agree.
+    The upper bound follows from d~_ik <= d_ik. Since the solve does not know
+    in advance which throats are inflow and which are outflow, the lengths are
+    the least-resistance ones that satisfy every pair at once:
 
-    * Dead-end bodies (one throat) and anything else: unchanged.
+        min  sum_k d~_ik^2 / V_ik
+        s.t. d~_ip + d~_ir >= |p_p - p_r|          (every pair of throats)
+             min(SC_MIN_HUB_DISTANCE, d_ik) <= d~_ik <= d_ik
 
-    Volumes are not touched, so total pore volume is conserved exactly.
+    The vanilla lengths are feasible (triangle inequality through c_i), so a
+    solution always exists. For a body with two throats this gives exactly
+    the chord, split so that the two half-links have the resistance of one
+    uniform tube of the body's volume (equal halves when V_i1 = V_i2). With
+    more throats, the lengths sit between the chords and the centroid route.
+
+    Inlet / outlet bodies (is_surface and centroid on the inlet/outlet plane,
+    same test as berg_cc.get_inlet_outlet_indices) are Dirichlet nodes on the
+    face: the shortest path from that equipotential face to throat k is the
+    perpendicular distance |p_k[axis] - c_i[axis]|, which is never longer than
+    d_ik, so that is the half-link length.
+
+    Dead-end bodies (one throat) have no pair and are left vanilla. Volumes
+    are not touched, so total pore volume is conserved exactly.
 
     Returns {(body_id, throat_id): d~_ik}.
     """
@@ -1649,31 +1659,60 @@ def compute_short_circuit_distances(network, axis=None, area_method='vox_project
         c = np.asarray(body.centroid, dtype=float)
         P = np.array([network.throats[tid].center for tid in tids], dtype=float)
         d = np.linalg.norm(P - c, axis=1)
+        lo = np.minimum(SC_MIN_HUB_DISTANCE, d)
         c_ax = c[axis]
 
         if body.is_surface and (c_ax <= 1 or c_ax >= L_max - 1):
-            plane = 0.0 if c_ax <= 1 else float(L_max)
-            d_perp = np.maximum(np.abs(P[:, axis] - plane), SC_MIN_PLANE_DISTANCE)
-            d_new = np.minimum(d, d_perp)
+            d_new = np.clip(np.abs(P[:, axis] - c_ax), lo, d)
         elif len(tids) >= 2:
-            A = np.array([max(network.throats[tid].get_area(area_method), 1e-6)
-                          for tid in tids])
-            chord = np.linalg.norm(P[:, None, :] - P[None, :, :], axis=2)
-            star = d[:, None] + d[None, :]
-            w = A[None, :] * (np.abs(P[:, None, axis] - P[None, :, axis]) + 0.5)
-            w[(star <= 1e-12) | np.eye(len(tids), dtype=bool)] = 0.0
-            num = (w * np.minimum(chord, star)).sum(axis=1)
-            den = (w * star).sum(axis=1)
-            ratio = np.ones(len(tids))
-            ok = den > 1e-12
-            ratio[ok] = np.clip(num[ok] / den[ok], SC_MIN_RATIO, 1.0)
-            d_new = d * ratio
+            if split_volume_equal:
+                V = np.ones(len(tids))
+            else:                                   # V_ik proportional to A_k
+                V = np.array([max(network.throats[tid].get_area(area_method), 1e-6)
+                              for tid in tids])
+            d_new = _chord_bounded_lengths(P, d, lo, 1.0 / V)
         else:
             continue
 
         for tid, dn in zip(tids, d_new):
             d_override[(body.body_id, tid)] = float(dn)
     return d_override
+
+
+def _chord_bounded_lengths(P, d, lo, w):
+    """
+    Solve  min sum_k w_k x_k^2  s.t.  x_p + x_r >= |P_p - P_r| (all pairs),
+    lo <= x <= d, for one body. d itself is feasible. The SLSQP result is
+    made exactly feasible by moving it towards d just far enough, which keeps
+    both bounds because the feasible set is convex.
+    """
+    from scipy.optimize import minimize
+
+    n = len(d)
+    I, J = np.triu_indices(n, 1)
+    chord = np.linalg.norm(P[I] - P[J], axis=1)
+    if n == 2:                                      # closed form
+        x = np.clip(chord[0] * (1.0 / w) / (1.0 / w).sum(), lo, d)
+        if x.sum() < chord[0]:                      # one side hit its bound
+            k = int(np.argmax(d - x))
+            x[k] = min(d[k], chord[0] - x[1 - k])
+    else:
+        A = np.zeros((len(I), n))
+        A[np.arange(len(I)), I] = 1.0
+        A[np.arange(len(I)), J] = 1.0
+        res = minimize(lambda x: (w * x * x).sum(), d, jac=lambda x: 2 * w * x,
+                       constraints=[{'type': 'ineq', 'fun': lambda x: A @ x - chord,
+                                     'jac': lambda x: A}],
+                       bounds=list(zip(lo, d)), method='SLSQP',
+                       options={'ftol': 1e-12, 'maxiter': 500})
+        x = np.clip(res.x, lo, d)
+    # exact feasibility: x + t (d - x) with the smallest t in [0, 1]
+    gap = chord - (x[I] + x[J])
+    if (gap > 0).any():
+        room = (d[I] + d[J]) - (x[I] + x[J])
+        t = np.max(np.where(gap > 0, gap / np.maximum(room, 1e-300), 0.0))
+        x = x + min(1.0, t * (1 + 1e-12)) * (d - x)
+    return x
 
 
 def _compute_fallback(side1, side2):
@@ -1786,7 +1825,8 @@ def calculate_network_effective_properties(
     d_override = {}
     if rn_method == 'short_circuit':
         d_override = compute_short_circuit_distances(
-            network, axis=axis, area_method=area_method)
+            network, axis=axis, area_method=area_method,
+            split_volume_equal=split_volume_equal)
     network.rn_method = rn_method
 
     for body in network.bodies.values():
