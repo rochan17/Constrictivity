@@ -1,0 +1,23 @@
+{
+ "sample": "Coarse_microstructure_9",
+ "vanilla": {
+  "n_links": 40,
+  "G_ratio": 2.628974801300165,
+  "G_ratio_fallback": 7.834359631970755,
+  "G_ratio_berg": 2.236959363553409,
+  "G_ratio_le16faces": 2.2277828672657285,
+  "G_ratio_gt16faces": 3.790454042240411,
+  "w_frac_fallback": 0.1288305687234953,
+  "w_frac_le16faces": 0.6884409071780829
+ },
+ "short_circuit": {
+  "n_links": 40,
+  "G_ratio": 3.5736391764099533,
+  "G_ratio_fallback": 12.07183632091153,
+  "G_ratio_berg": 3.0109809402380434,
+  "G_ratio_le16faces": 3.0567712952292343,
+  "G_ratio_gt16faces": 5.046978320588622,
+  "w_frac_fallback": 0.1233741854362154,
+  "w_frac_le16faces": 0.6884409071780829
+ }
+}

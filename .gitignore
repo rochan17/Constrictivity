@@ -17,5 +17,6 @@ analysis/collated_info/COLLATED_REPORT.md
 # Block any new top-level folder (existing tracked folders are exempted below)
 /*/
 !/analysis/
+!/Test Run/
 
 .DS_Store

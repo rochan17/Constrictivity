@@ -1,0 +1,27 @@
+{
+ "sample": "Medium_microstructure_3",
+ "n_throats": 847,
+ "n_no_shared_face": 25,
+ "median_ratio": 0.9514345957555106,
+ "current_weighted_ratio": 1.0908981099652606,
+ "frac_throats_le4_faces": 0.1487603305785124,
+ "frac_current_le16_faces": 0.19083000159690117,
+ "bins": {
+  "1-4": {
+   "n": 101,
+   "median_ratio": 2.0
+  },
+  "5-16": {
+   "n": 139,
+   "median_ratio": 1.4177456141020004
+  },
+  "17-64": {
+   "n": 232,
+   "median_ratio": 0.995377908598505
+  },
+  "65-1000000000": {
+   "n": 350,
+   "median_ratio": 0.7953295714927211
+  }
+ }
+}

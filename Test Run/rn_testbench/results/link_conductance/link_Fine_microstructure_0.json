@@ -1,0 +1,23 @@
+{
+ "sample": "Fine_microstructure_0",
+ "vanilla": {
+  "n_links": 510,
+  "G_ratio": 0.46629448556624964,
+  "G_ratio_fallback": 0.39414995313671414,
+  "G_ratio_berg": 0.819771528566692,
+  "G_ratio_le16faces": 1.3753881978606082,
+  "G_ratio_gt16faces": 0.44029708210884133,
+  "w_frac_fallback": 0.7704666540803399,
+  "w_frac_le16faces": 0.050364878335852875
+ },
+ "short_circuit": {
+  "n_links": 510,
+  "G_ratio": 0.7025368687263597,
+  "G_ratio_fallback": 0.5762005146767583,
+  "G_ratio_berg": 1.1579979284545125,
+  "G_ratio_le16faces": 2.013262418156153,
+  "G_ratio_gt16faces": 0.6643843423659175,
+  "w_frac_fallback": 0.7159822425303493,
+  "w_frac_le16faces": 0.050364878335852875
+ }
+}
