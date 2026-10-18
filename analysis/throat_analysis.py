@@ -177,8 +177,8 @@ class MicrostructureData:
 
 
 def _build_microstructure_data(ms_dir: Path, berg_dir: Optional[Path], tau_dir: Optional[Path]) -> MicrostructureData:
-    manifest_path = ms_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    manifest = json.loads((ms_dir / "manifest.json").read_text())
+    phase_id = manifest.get("phase_id", 3)
 
     if berg_dir is None or not (berg_dir / cu.FULL_RESULT_FILENAME).exists():
         raise FileNotFoundError(f"No berg_cc full_result.pkl found for {ms_dir}")
@@ -193,12 +193,6 @@ def _build_microstructure_data(ms_dir: Path, berg_dir: Optional[Path], tau_dir: 
     with open(tau_dir / cu.FULL_RESULT_FILENAME, "rb") as f:
         tau = pickle.load(f)
     tau_metrics = cu.load_metrics(tau_dir)
-    tau_config = json.loads((tau_dir / cu.CONFIG_FILENAME).read_text())
-
-    # phase_id is set by pipeline.py per-microstructure (default 1) and
-    # persisted in taufactor's config.json; manifest.json's phase_id (if
-    # present) is an explicit override, matching pipeline._load_manifest.
-    phase_id = manifest.get("phase_id", tau_config.get("phase_id", 1))
 
     segmented = np.load(ms_dir / "segmented.npy")
     body_array = np.load(ms_dir / "body_array.npy")

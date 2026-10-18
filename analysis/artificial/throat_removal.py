@@ -426,7 +426,7 @@ def prune_and_recompute(
         body_array,
         min_throat_size=config.get("min_throat_size", 5),
         dilate_both=config.get("dilate_both", True),
-        n_jobs=config.get("n_jobs", 16),
+        n_jobs=config.get("n_jobs", 1),
         direction=direction,
         surface_axis=config.get("surface_axis"),
         skip_surface_surface=config.get("skip_surface_surface", True),

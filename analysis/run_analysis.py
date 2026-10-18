@@ -453,7 +453,7 @@ def main():
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     names = args.microstructures or sorted(
-        p.name for p in args.data_dir.iterdir() if p.is_dir() and (p / "segmented.npy").exists()
+        p.name for p in args.data_dir.iterdir() if p.is_dir() and (p / "manifest.json").exists()
     )
 
     all_dfs = {}
