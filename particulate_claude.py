@@ -51,6 +51,19 @@ Key improvements over the original
 
 9.  compute_surface_mask takes an explicit `axis` so surface detection can
     follow the chosen flow direction.
+
+10. Speed (identical outputs): body merges run on an in-memory label
+    adjacency graph, body properties use labelled reductions, each pair is
+    cropped to the intersection of the padded boxes, and per-voxel hulls are
+    built vectorised.
+
+11. Two resistor-network variants via `rn_method` in
+    calculate_network_effective_properties: 'vanilla' (original centroid
+    star) and 'short_circuit' (shortened half-link lengths, see
+    compute_short_circuit_distances). DEFAULT_RN_METHOD selects the default.
+
+12. extract_throats_from_bodies_voxel_parallel(merge_bodies=True) runs the
+    boundary-only and short-circuit body merges itself.
 """
 
 import time
@@ -63,7 +76,7 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import scipy.ndimage as ndi
 from skimage.segmentation import find_boundaries
-from shapely import MultiPoint, unary_union
+import shapely
 import networkx as nx
 
 # Single source of truth for the flow-axis <-> direction-letter convention
@@ -120,6 +133,23 @@ DEFAULT_ALPHA = 0.5
 # A_tk / A_itk above this triggers the uniform-pipe (equal-thirds) fallback.
 #RATIO_THRESHOLD = 4 ** (1 / 3)
 RATIO_THRESHOLD = 1
+
+# Resistor-network (RN) half-link length model used by
+# calculate_network_effective_properties (see its docstring):
+#   'vanilla'       -- d_itk = |throat centroid - body centroid| (original
+#                      Berg star geometry; every path detours via centroids)
+#   'short_circuit' -- d_itk shortened before the solve: throat-to-inlet/
+#                      outlet-plane distance for Dirichlet bodies, weighted
+#                      throat-to-throat chords for interior bodies.
+# Flip DEFAULT_RN_METHOD to 'vanilla' to revert every caller that does not
+# pass rn_method explicitly (pipeline.py records the resolved value in the
+# berg_cc config, so the two variants are cached as separate versions).
+RN_METHODS = ('vanilla', 'short_circuit')
+DEFAULT_RN_METHOD = 'short_circuit'
+# Interior-body shortening factor is clipped to [SC_MIN_RATIO, 1].
+SC_MIN_RATIO = 0.25
+# Floor on the plane-to-throat distance of inlet/outlet bodies [voxels].
+SC_MIN_PLANE_DISTANCE = 0.5
 
 # 8 corner offsets of a unit voxel, used by the voxel-projection area method.
 _CUBE_CORNERS = np.array(
@@ -316,15 +346,92 @@ def merge_boundary_only_bodies(body_array, axis=0, verbose=True):
     return merged_array, len(merged_ids), merged_ids
 
 
+class _LabelGraph:
+    """
+    In-memory 6-connected adjacency graph of a labelled body array, built in
+    one O(N_voxels) pass, so iterative body merges run on sets instead of
+    re-scanning / re-dilating the full volume once per label.
+
+    Two bodies are 6-neighbours (what `binary_dilation(mask_a) & mask_b`
+    with the default cross structure tests) iff they share a voxel face, so
+    the adjacency comes straight from comparing each voxel with its +1
+    neighbour along every axis.
+
+    Merges are tracked as label -> member-label lists and applied at the end
+    with a single lookup-table relabel (`relabel`).
+    """
+
+    def __init__(self, body_array, axis):
+        max_lab = int(body_array.max())
+        self.counts = np.bincount(body_array.ravel(), minlength=max_lab + 1).astype(np.int64)
+
+        keys = []
+        for d in range(body_array.ndim):
+            a = np.moveaxis(body_array, d, 0)
+            lo, hi = a[:-1], a[1:]
+            diff = (lo != hi) & (lo > 0) & (hi > 0)
+            u = lo[diff].astype(np.int64)
+            v = hi[diff].astype(np.int64)
+            keys.append(np.unique(np.minimum(u, v) * (max_lab + 1) + np.maximum(u, v)))
+        keys = np.unique(np.concatenate(keys)) if keys else np.empty(0, dtype=np.int64)
+
+        alive = np.flatnonzero(self.counts[1:]) + 1
+        self.adj = {int(l): set() for l in alive}
+        for u, v in zip((keys // (max_lab + 1)).tolist(), (keys % (max_lab + 1)).tolist()):
+            self.adj[u].add(v)
+            self.adj[v].add(u)
+
+        inlet = np.take(body_array, 0, axis=axis)
+        outlet = np.take(body_array, -1, axis=axis)
+        self.touch_in = np.zeros(max_lab + 1, dtype=bool)
+        self.touch_out = np.zeros(max_lab + 1, dtype=bool)
+        self.touch_in[np.unique(inlet)] = True
+        self.touch_out[np.unique(outlet)] = True
+        self.touch_in[0] = self.touch_out[0] = False
+
+        self.members = {int(l): [int(l)] for l in alive}
+        self.max_lab = max_lab
+
+    def labels(self):
+        """Sorted alive labels (what np.unique(merged_array) > 0 returned)."""
+        return sorted(self.adj)
+
+    def neighbours(self, lab):
+        """Same set (same construction, same iteration order) as the old
+        `set(np.unique(merged_array[neighbour_voxels])) - {0, lab}`."""
+        return set(sorted(self.adj[lab])) - {0, lab}
+
+    def merge(self, lab, target):
+        """Relabel every voxel of `lab` to `target`."""
+        self.counts[target] += self.counts[lab]
+        self.counts[lab] = 0
+        self.touch_in[target] |= self.touch_in[lab]
+        self.touch_out[target] |= self.touch_out[lab]
+        for nb in self.adj.pop(lab):
+            self.adj[nb].discard(lab)
+            if nb != target:
+                self.adj[nb].add(target)
+                self.adj[target].add(nb)
+        self.members[target].extend(self.members.pop(lab))
+
+    def relabel(self, body_array):
+        lut = np.zeros(self.max_lab + 1, dtype=body_array.dtype)
+        for lab, mem in self.members.items():
+            lut[mem] = lab
+        return lut[body_array]
+
+
 def merge_boundary_only_bodies_iterative(body_array, axis=0, verbose=True):
     """
     Iterative version: repeat merging until no more boundary-only bodies exist.
     Each pass can expose new boundary-only bodies (chains of dead ends).
-    """
-    import scipy.ndimage as ndi
-    struct = ndi.generate_binary_structure(3, 1)
 
-    merged_array  = body_array.copy()
+    Runs on an in-memory label adjacency graph (_LabelGraph) instead of
+    full-volume dilations per label; the merge decisions (iteration order,
+    stale-within-a-pass face sets, largest-neighbour tie-breaking) are the
+    same as the original voxel implementation, so the output is identical.
+    """
+    graph = _LabelGraph(body_array, axis)
     total_merged  = 0
     all_merged_ids = []
     iteration     = 0
@@ -332,32 +439,18 @@ def merge_boundary_only_bodies_iterative(body_array, axis=0, verbose=True):
     while True:
         iteration += 1
 
-        sl_inlet  = [slice(None)] * 3; sl_inlet[axis]  = 0
-        sl_outlet = [slice(None)] * 3; sl_outlet[axis] = -1
-        inlet_face_mask  = np.zeros(merged_array.shape, dtype=bool)
-        outlet_face_mask = np.zeros(merged_array.shape, dtype=bool)
-        inlet_face_mask[tuple(sl_inlet)]   = True
-        outlet_face_mask[tuple(sl_outlet)] = True
-
-        unique_labels = np.unique(merged_array)
-        unique_labels = unique_labels[unique_labels > 0]
-
         inlet_bodies  = set()
         outlet_bodies = set()
-        for lab in unique_labels:
-            body_mask = (merged_array == lab)
-            if np.any(body_mask & inlet_face_mask):
+        for lab in graph.labels():
+            if graph.touch_in[lab]:
                 inlet_bodies.add(lab)
-            if np.any(body_mask & outlet_face_mask):
+            if graph.touch_out[lab]:
                 outlet_bodies.add(lab)
         face_bodies = inlet_bodies | outlet_bodies
 
         boundary_only = []
         for lab in face_bodies:
-            body_mask        = (merged_array == lab)
-            dilated          = ndi.binary_dilation(body_mask, structure=struct)
-            neighbour_voxels = dilated & ~body_mask & (merged_array > 0)
-            neighbour_labels = set(np.unique(merged_array[neighbour_voxels])) - {0, lab}
+            neighbour_labels = graph.neighbours(lab)
             interior_neighbours = neighbour_labels - face_bodies
             if len(interior_neighbours) == 0:
                 boundary_only.append(lab)
@@ -370,22 +463,20 @@ def merge_boundary_only_bodies_iterative(body_array, axis=0, verbose=True):
 
         merged_this_pass = []
         for lab in boundary_only:
-            body_mask        = (merged_array == lab)
-            dilated          = ndi.binary_dilation(body_mask, structure=struct)
-            neighbour_voxels = dilated & ~body_mask & (merged_array > 0)
-            neighbour_labels = set(np.unique(merged_array[neighbour_voxels])) - {0, lab}
+            neighbour_labels = graph.neighbours(lab)
             face_neighbours  = neighbour_labels & face_bodies - {lab}
 
             if len(face_neighbours) == 0:
                 continue
 
-            target = max(face_neighbours,
-                         key=lambda l: int(np.sum(merged_array == l)))
-            merged_array[body_mask] = target
+            target = max(face_neighbours, key=lambda l: int(graph.counts[l]))
+            graph.merge(lab, target)
             merged_this_pass.append(lab)
 
         total_merged   += len(merged_this_pass)
         all_merged_ids += merged_this_pass
+
+    merged_array = graph.relabel(body_array)
 
     if verbose:
         n_before = len(np.unique(body_array))  - 1
@@ -412,20 +503,13 @@ def merge_short_circuit_bodies(body_array, axis=0, verbose=True):
     same-potential nodes). Merge them into their largest boundary neighbour.
     
     Run iteratively because merging one body can expose another.
+
+    Runs on an in-memory label adjacency graph (_LabelGraph); decisions are
+    made from the same per-iteration neighbour snapshot as the original
+    voxel implementation, so the output is identical.
     """
-    import scipy.ndimage as ndi
-    struct = ndi.generate_binary_structure(3, 1)
-
-    merged_array = body_array.copy()
+    graph = _LabelGraph(body_array, axis)
     total_merged = 0
-
-    # ── Face masks ────────────────────────────────────────────────────────────
-    sl_inlet  = [slice(None)] * 3; sl_inlet[axis]  = 0
-    sl_outlet = [slice(None)] * 3; sl_outlet[axis] = -1
-    inlet_face_mask  = np.zeros(body_array.shape, dtype=bool)
-    outlet_face_mask = np.zeros(body_array.shape, dtype=bool)
-    inlet_face_mask[tuple(sl_inlet)]   = True
-    outlet_face_mask[tuple(sl_outlet)] = True
 
     changed   = True
     iteration = 0
@@ -434,27 +518,20 @@ def merge_short_circuit_bodies(body_array, axis=0, verbose=True):
         changed   = False
         iteration += 1
 
-        unique_labels = np.unique(merged_array)
-        unique_labels = unique_labels[unique_labels > 0]
+        unique_labels = graph.labels()
 
         # Recompute face bodies and neighbours each iteration
         # since merging changes the array
         inlet_bodies  = set()
         outlet_bodies = set()
         for lab in unique_labels:
-            body_mask = (merged_array == lab)
-            if np.any(body_mask & inlet_face_mask):
+            if graph.touch_in[lab]:
                 inlet_bodies.add(lab)
-            if np.any(body_mask & outlet_face_mask):
+            if graph.touch_out[lab]:
                 outlet_bodies.add(lab)
         boundary_bodies = inlet_bodies | outlet_bodies
 
-        neighbours = {}
-        for lab in unique_labels:
-            body_mask        = (merged_array == lab)
-            dilated          = ndi.binary_dilation(body_mask, structure=struct)
-            nbr_vox          = dilated & ~body_mask & (merged_array > 0)
-            neighbours[lab]  = set(np.unique(merged_array[nbr_vox])) - {0, lab}
+        neighbours = {lab: graph.neighbours(lab) for lab in unique_labels}
 
         merged_this_iter = []
 
@@ -492,9 +569,8 @@ def merge_short_circuit_bodies(body_array, axis=0, verbose=True):
                 boundary_nbrs = nbrs & boundary_bodies
                 if len(boundary_nbrs) == 0:
                     continue
-                target = max(boundary_nbrs,
-                             key=lambda l: int(np.sum(merged_array == l)))
-                merged_array[merged_array == lab] = target
+                target = max(boundary_nbrs, key=lambda l: int(graph.counts[l]))
+                graph.merge(lab, target)
                 merged_this_iter.append(lab)
                 changed = True
 
@@ -503,6 +579,8 @@ def merge_short_circuit_bodies(body_array, axis=0, verbose=True):
         if verbose and len(merged_this_iter) > 0:
             print(f"  Iteration {iteration}: merged {len(merged_this_iter)} bodies "
                   f"→ {merged_this_iter}")
+
+    merged_array = graph.relabel(body_array)
 
     if verbose:
         n_before = len(np.unique(body_array))   - 1
@@ -535,23 +613,36 @@ def compute_initial_body_props(body_array, distance, unique_bodies, direction=No
     axis = _resolve_axis(direction, surface_axis)
     surface_mask = compute_surface_mask(body_array.shape, axis=axis)
 
-    body_props = {}
-    for body_id in unique_bodies:
-        body_mask = (body_array == body_id)
-        volume = int(np.sum(body_mask))
-        if volume == 0:
-            continue
+    # All per-body reductions in a few labelled passes instead of one
+    # full-volume mask per body. Centroids are exact integer index sums / n,
+    # identical to ndi.center_of_mass(body_mask) on each body separately.
+    ids = [int(b) for b in unique_bodies]
+    flat = body_array.ravel()
+    volumes = np.bincount(flat, minlength=int(body_array.max()) + 1)
+    surf_counts = np.bincount(flat[surface_mask.ravel()], minlength=len(volumes))
+    ids = [b for b in ids if volumes[b] > 0]
+    if not ids:
+        return {}
+    ones = np.ones(body_array.shape, dtype=bool)
+    vol_centroids = ndi.center_of_mass(ones, labels=body_array, index=ids)
+    max_radii = ndi.maximum(distance, labels=body_array, index=ids)
+    surf_ids = [b for b in ids if surf_counts[b] > 0]
+    surf_centroids = dict(zip(surf_ids, ndi.center_of_mass(
+        surface_mask, labels=body_array, index=surf_ids))) if surf_ids else {}
 
-        volume_centroid = ndi.center_of_mass(body_mask)
-        max_radius = float(np.max(distance[body_mask]))
+    body_props = {}
+    for k, body_id in enumerate(ids):
+        volume = int(volumes[body_id])
+
+        volume_centroid = tuple(vol_centroids[k])
+        max_radius = float(max_radii[k])
         equiv_radius = (SPHERE_VOLUME_CONSTANT * volume) ** (1.0 / 3.0)
 
-        surface_overlap = body_mask & surface_mask
-        surface_area_voxels = int(surface_overlap.sum())
+        surface_area_voxels = int(surf_counts[body_id])
         is_surface = surface_area_voxels > 0
 
         if is_surface:
-            surface_centroid = ndi.center_of_mass(surface_overlap)
+            surface_centroid = tuple(surf_centroids[body_id])
             nodal_state = 1
             centroid = surface_centroid
         else:
@@ -655,11 +746,13 @@ def get_planar_area(coords, plane_normal, centroid):
     proj = get_projected_coords(flat, plane_normal, centroid)   # (8n, 3)
     proj2d = (proj @ new_axis).reshape(n, 8, 2)                 # (n, 8, 2)
 
-    polys = [MultiPoint(proj2d[k]).convex_hull for k in range(n)]
+    # Vectorised per-voxel hulls: same GEOS geometries as building
+    # MultiPoint(proj2d[k]).convex_hull one voxel at a time.
+    polys = shapely.convex_hull(shapely.multipoints(proj2d))
     try:
-        return float(unary_union(polys).area)
+        return float(shapely.union_all(polys).area)
     except Exception:
-        return float(sum(p.area for p in polys))
+        return float(shapely.area(polys).sum())
 
 
 def compute_throat_areas(throat_coords, throat_centroid, flow_direction, voxel_size=1.0):
@@ -871,6 +964,9 @@ class PoreNetwork:
     conservation_info: Dict[str, Any] = field(default_factory=dict)
     shape: Optional[Tuple[int, int, int]] = None
     voxel_size: float = 1.0
+    flow_axis: Optional[int] = None          # axis whose two faces are inlet/outlet
+    body_array: Optional[np.ndarray] = None  # labels the network was built from (post-merge)
+    rn_method: Optional[str] = None          # set by calculate_network_effective_properties
 
     def __repr__(self):
         return (f"PoreNetwork(bodies={len(self.bodies)}, "
@@ -1168,7 +1264,7 @@ def _resolve_n_jobs(n_jobs):
 # Network assembly (shared by serial and parallel extraction)
 # ──────────────────────────────────────────────────────────────────────────────
 def _assemble_network(body_props, throat_props, body_array,
-                      voxel_size=1.0, verbose=True):
+                      voxel_size=1.0, flow_axis=None, verbose=True):
     """Build a PoreNetwork from raw body_props and throat_props dicts."""
     # Connectivity
     for tid, p in throat_props.items():
@@ -1249,6 +1345,8 @@ def _assemble_network(body_props, throat_props, body_array,
         conservation_info=conservation_info,
         shape=tuple(body_array.shape),
         voxel_size=voxel_size,
+        flow_axis=flow_axis,
+        body_array=body_array,
     )
 
 
@@ -1263,6 +1361,7 @@ def extract_throats_from_bodies_voxel_parallel(
     direction=None,
     surface_axis=None,
     skip_surface_surface=True,
+    merge_bodies=False,
     verbose=True,
 ):
     """
@@ -1293,6 +1392,11 @@ def extract_throats_from_bodies_voxel_parallel(
         parallel code did this implicitly; the default here is False (do not
         skip), which is the more conservative / correct behaviour.  Set True
         to reproduce prior parallel results exactly.
+    merge_bodies : bool
+        If True, first run merge_boundary_only_bodies_iterative and then
+        merge_short_circuit_bodies on `body_array` (along the flow axis), and
+        build the network from the merged labels. The merged label array is
+        kept on the returned network as `network.body_array`.
     verbose : bool
         Print timing / progress.
 
@@ -1301,6 +1405,15 @@ def extract_throats_from_bodies_voxel_parallel(
     PoreNetwork
     """
     timer = StepTimer(enabled=verbose)
+    axis = _resolve_axis(direction, surface_axis)
+
+    if merge_bodies:
+        n_raw = len(get_unique_bodies(body_array))
+        body_array, n_b, _ = merge_boundary_only_bodies_iterative(
+            body_array, axis=axis, verbose=verbose)
+        body_array, n_s = merge_short_circuit_bodies(body_array, axis=axis, verbose=verbose)
+        timer.log(f"Merged bodies: {n_raw} -> {n_raw - n_b - n_s} "
+                  f"({n_b} boundary-only, {n_s} short-circuit).")
 
     pore_mask = compute_pore_mask(body_array)
     distance = compute_distance_transform(pore_mask)
@@ -1325,11 +1438,17 @@ def extract_throats_from_bodies_voxel_parallel(
     timer.log(f"Candidate pairs: {len(pairs)} / {n_all_pairs} "
               f"({kept_pct:.1f}% kept after bounding-box filter).")
 
-    # ── Build tiny per-pair tasks (union crop box + centroids) ─────────────
+    # ── Build tiny per-pair tasks (intersection crop box + centroids) ──────
+    # A throat voxel must lie in dilate(b1) & dilate(b2), i.e. inside BOTH
+    # padded boxes, so the intersection of the boxes is enough. Cropping
+    # there cannot cut a dilation short: a voxel on the crop's edge is
+    # already outside the other body's dilation (pad >= 1 + dilation reach).
     tasks = []
     for (a, b) in pairs:
-        lo = np.minimum(boxes[a][0], boxes[b][0])
-        hi = np.maximum(boxes[a][1], boxes[b][1])
+        lo = np.maximum(boxes[a][0], boxes[b][0])
+        hi = np.minimum(boxes[a][1], boxes[b][1])
+        if np.any(lo >= hi):
+            continue
         c1 = np.asarray(body_props[a]['centroid'], dtype=float)
         c2 = np.asarray(body_props[b]['centroid'], dtype=float)
         tasks.append((a, b, lo, hi, c1, c2))
@@ -1383,14 +1502,15 @@ def extract_throats_from_bodies_voxel_parallel(
 
     # ── Assemble network ─────────────────────────────────────────────────────
     network = _assemble_network(body_props, throat_props, body_array,
-                                voxel_size=1.0, verbose=verbose)
+                                voxel_size=1.0, flow_axis=axis, verbose=verbose)
     timer.log("Assembled PoreNetwork.")
     return network
 
 
 def extract_throats_from_bodies_voxel(body_array, min_throat_size=10,
                                       dilate_both=True, direction=None, surface_axis=None,
-                                      skip_surface_surface=False, verbose=True):
+                                      skip_surface_surface=False, merge_bodies=False,
+                                      verbose=True):
     """Serial alias (n_jobs = 1) kept for backward compatibility."""
     return extract_throats_from_bodies_voxel_parallel(
         body_array,
@@ -1400,6 +1520,7 @@ def extract_throats_from_bodies_voxel(body_array, min_throat_size=10,
         direction=direction,
         surface_axis=surface_axis,
         skip_surface_surface=skip_surface_surface,
+        merge_bodies=merge_bodies,
         verbose=verbose,
     )
 
@@ -1427,7 +1548,7 @@ def _compute_volume_share(body, throat_id, A_tk, sum_throat_areas, split_volume_
     return body.volume_voxels * (A_tk / total_area)
 
 
-def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA):
+def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA, d_override=None):
     """
     Effective properties for one body side of a connection (Berg 2012).
 
@@ -1438,8 +1559,14 @@ def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA):
     physical (resistance decreases as the throat widens). For ratio > 1 the
     connection goes to the fallback (RATIO_THRESHOLD = 1.0), which overwrites
     these values, so they are returned as a harmless uniform leg.
+
+    `d_override`, if given, replaces the centroid-to-throat distance d_itk
+    (rn_method='short_circuit'); V_itk is unchanged, so A_itk = V_itk / d_itk
+    keeps the half-link volume exact.
     """
-    if throat.center is not None:
+    if d_override is not None:
+        d_itk = float(d_override)
+    elif throat.center is not None:
         d_itk = float(np.linalg.norm(np.asarray(throat.center, dtype=float) -
                                      np.asarray(body.centroid, dtype=float)))
     else:
@@ -1472,6 +1599,81 @@ def _compute_body_side(body, throat, A_tk, V_itk, alpha=DEFAULT_ALPHA):
         'A_eff_itk': A_eff_itk,
         'V_eff_itk': d_eff_itk * A_eff_itk,
     }
+
+
+def compute_short_circuit_distances(network, axis=None, area_method='vox_projection'):
+    """
+    Short-circuited half-link lengths d~_ik for rn_method='short_circuit'.
+
+    In the vanilla RN every half-link runs from the body centroid c_i to the
+    throat centroid p_k, so current crossing body i from throat p to throat
+    r is charged the "star" length |p_p - c_i| + |c_i - p_r| instead of
+    something close to the chord |p_p - p_r|. Because the half-link volume
+    V_ik is fixed, its conductance is sigma * V_ik / d_ik^2, so a path that
+    is lambda times too long is lambda^2 times too resistive.
+
+    Rules (lengths in voxels, flow axis = `axis`):
+
+    * Inlet / outlet bodies (is_surface and centroid on the inlet/outlet
+      plane, same test as berg_cc.get_inlet_outlet_indices): the whole
+      contact face is one Dirichlet equipotential, so current leaves the
+      plane perpendicular to it. d~_ik = min(d_ik, max(|p_k[axis] - plane|,
+      SC_MIN_PLANE_DISTANCE)) -- the transverse offset between the face's
+      centroid and the throat is dropped.
+
+    * Interior bodies with >= 2 throats: throat p is paired with every other
+      throat r of the same body, weighted by w_pr = A_r * (|dx_pr| + 0.5) (a
+      geometry-only proxy for how much current p exchanges with r: larger,
+      and more axially separated, throats carry more of it). Then
+          ratio_p = sum_r w_pr min(chord_pr, star_pr) / sum_r w_pr star_pr
+          d~_ip   = d_ip * clip(ratio_p, SC_MIN_RATIO, 1)
+      so a path p -> r through the body has length ~ chord_pr when the
+      ratios of p and r agree.
+
+    * Dead-end bodies (one throat) and anything else: unchanged.
+
+    Volumes are not touched, so total pore volume is conserved exactly.
+
+    Returns {(body_id, throat_id): d~_ik}.
+    """
+    if axis is None:
+        axis = network.flow_axis if network.flow_axis is not None else 0
+    L_max = network.shape[axis] - 1
+
+    d_override = {}
+    for body in network.bodies.values():
+        tids = [tid for tid in body.connected_throats
+                if network.throats[tid].center is not None]
+        if not tids:
+            continue
+        c = np.asarray(body.centroid, dtype=float)
+        P = np.array([network.throats[tid].center for tid in tids], dtype=float)
+        d = np.linalg.norm(P - c, axis=1)
+        c_ax = c[axis]
+
+        if body.is_surface and (c_ax <= 1 or c_ax >= L_max - 1):
+            plane = 0.0 if c_ax <= 1 else float(L_max)
+            d_perp = np.maximum(np.abs(P[:, axis] - plane), SC_MIN_PLANE_DISTANCE)
+            d_new = np.minimum(d, d_perp)
+        elif len(tids) >= 2:
+            A = np.array([max(network.throats[tid].get_area(area_method), 1e-6)
+                          for tid in tids])
+            chord = np.linalg.norm(P[:, None, :] - P[None, :, :], axis=2)
+            star = d[:, None] + d[None, :]
+            w = A[None, :] * (np.abs(P[:, None, axis] - P[None, :, axis]) + 0.5)
+            w[(star <= 1e-12) | np.eye(len(tids), dtype=bool)] = 0.0
+            num = (w * np.minimum(chord, star)).sum(axis=1)
+            den = (w * star).sum(axis=1)
+            ratio = np.ones(len(tids))
+            ok = den > 1e-12
+            ratio[ok] = np.clip(num[ok] / den[ok], SC_MIN_RATIO, 1.0)
+            d_new = d * ratio
+        else:
+            continue
+
+        for tid, dn in zip(tids, d_new):
+            d_override[(body.body_id, tid)] = float(dn)
+    return d_override
 
 
 def _compute_fallback(side1, side2):
@@ -1539,11 +1741,22 @@ def calculate_network_effective_properties(
     area_method='vox_projection',
     alpha=DEFAULT_ALPHA,
     split_volume_equal=True,
+    rn_method=None,
+    direction=None,
     verbose=True,
 ):
     """
     Compute Berg effective geometry (lengths/areas/volumes) for every
     connection and throat in the network.
+
+    rn_method : 'vanilla' | 'short_circuit' | None
+        Half-link length model (see RN_METHODS). None -> DEFAULT_RN_METHOD.
+        'vanilla' is the original centroid-star geometry, bit-for-bit;
+        'short_circuit' replaces d_itk with compute_short_circuit_distances
+        before the Berg effective geometry is built, keeping every V_itk.
+    direction : 'x' | 'y' | 'z' | None
+        Flow direction for 'short_circuit'. None -> network.flow_axis
+        (recorded at extraction), else 'x'.
 
     Run serially: each iteration is a handful of scalar numpy ops and mutates
     shared body/throat objects, so process-parallelism would cost far more in
@@ -1556,14 +1769,25 @@ def calculate_network_effective_properties(
         'zero_length':   [],   # throat_id
     }
 
+    rn_method = DEFAULT_RN_METHOD if rn_method is None else rn_method
+    if rn_method not in RN_METHODS:
+        raise ValueError(f"rn_method must be one of {RN_METHODS}, got {rn_method!r}")
+    axis = DIRECTION_TO_AXIS[direction] if direction is not None else network.flow_axis
+
     if verbose:
         print("Starting effective property calculations...")
         print(f"  area_method={area_method}, alpha={alpha}, "
-              f"split_volume_equal={split_volume_equal}")
+              f"split_volume_equal={split_volume_equal}, rn_method={rn_method}")
 
     throat_area_cache = {tid: t.get_area(area_method)
                          for tid, t in network.throats.items()}
     sum_throat_areas = _compute_sum_throat_areas(network, throat_area_cache)
+
+    d_override = {}
+    if rn_method == 'short_circuit':
+        d_override = compute_short_circuit_distances(
+            network, axis=axis, area_method=area_method)
+    network.rn_method = rn_method
 
     for body in network.bodies.values():
         body.connections_to_throats.clear()
@@ -1580,8 +1804,10 @@ def calculate_network_effective_properties(
         V_1tk = _compute_volume_share(body1, throat_id, A_tk, sum_throat_areas, split_volume_equal)
         V_2tk = _compute_volume_share(body2, throat_id, A_tk, sum_throat_areas, split_volume_equal)
 
-        side1 = _compute_body_side(body1, throat, A_tk, V_1tk, alpha=alpha)
-        side2 = _compute_body_side(body2, throat, A_tk, V_2tk, alpha=alpha)
+        side1 = _compute_body_side(body1, throat, A_tk, V_1tk, alpha=alpha,
+                                   d_override=d_override.get((body1.body_id, throat_id)))
+        side2 = _compute_body_side(body2, throat, A_tk, V_2tk, alpha=alpha,
+                                   d_override=d_override.get((body2.body_id, throat_id)))
 
         if side1 is None:
             warnings['zero_distance'].append((throat.body1_id, throat_id))

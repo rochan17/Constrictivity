@@ -280,9 +280,9 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
                  verbose: bool = False, n_jobs: int = 1, save_full: bool = False):
     """
     config keys:
-        min_throat_size, dilate_both, skip_surface_surface
+        min_throat_size, dilate_both, skip_surface_surface, merge_bodies
             -> particulate_claude.extract_throats_from_bodies_voxel_parallel
-        area_method, alpha, split_volume_equal
+        area_method, alpha, split_volume_equal, rn_method
             -> particulate_claude.calculate_network_effective_properties
         sigma, direction, delta_V, voxel_size, streamtube_method
             -> berg_cc.compute_all_berg
@@ -295,6 +295,12 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
     is still honoured as a legacy override, but only if it agrees with
     `direction` -- see particulate_claude._resolve_axis.
 
+    `merge_bodies` (default True) runs the boundary-only and short-circuit
+    body merges inside the extraction call; `rn_method` ('vanilla' or
+    'short_circuit', default particulate_claude.DEFAULT_RN_METHOD) picks the
+    resistor-network half-link length model. run_microstructure writes both
+    into the config so they are part of the cache key.
+
     Returns (metrics, full) where full is None unless save_full is True, in
     which case it holds the full per-streamtube list (node_path, throat_path,
     I_gamma, volume_shares, V_gamma, L_gamma for every streamtube -- on the
@@ -305,11 +311,6 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
     """
     t0 = time.perf_counter()
     direction = config.get("direction", "x")
-
-    axis = pc.DIRECTION_TO_AXIS[direction]
-    body_array, _, _ = pc.merge_boundary_only_bodies_iterative(body_array, axis=axis, verbose=verbose)
-    body_array, _  = pc.merge_short_circuit_bodies(body_array, axis=axis, verbose=verbose)
-
     network = pc.extract_throats_from_bodies_voxel_parallel(
         body_array,
         min_throat_size=config.get("min_throat_size", 5),
@@ -318,6 +319,7 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
         direction=direction,
         surface_axis=config.get("surface_axis"),
         skip_surface_surface=config.get("skip_surface_surface", True),
+        merge_bodies=config.get("merge_bodies", True),
         verbose=verbose,
     )
     network, warnings = pc.calculate_network_effective_properties(
@@ -325,11 +327,13 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
         area_method=config.get("area_method", "vox_projection"),
         alpha=config.get("alpha", 0.5),
         split_volume_equal=config.get("split_volume_equal", True),
+        rn_method=config.get("rn_method", pc.DEFAULT_RN_METHOD),
+        direction=direction,
         verbose=verbose,
     )
 
     result = berg_cc.compute_all_berg(
-        network, body_array,
+        network, network.body_array,
         area_method=config.get("area_method", "vox_projection"),
         sigma=config.get("sigma", 1.0),
         direction=direction,
@@ -340,6 +344,7 @@ def run_berg_cc(body_array: np.ndarray, config: Dict[str, Any],
     )
 
     metrics = {
+        "rn_method": network.rn_method,
         "n_bodies": network.num_bodies,
         "n_throats": network.num_throats,
         "n_streamtubes": len(result["streamtubes"]),
@@ -491,6 +496,8 @@ def run_microstructure(
     berg_voxel_config.setdefault("segmented_file", segmented_file)
     berg_cc_config.setdefault("direction", pc.AXIS_TO_DIRECTION[axis])
     berg_cc_config.setdefault("body_array_file", body_array_file)
+    berg_cc_config.setdefault("merge_bodies", True)
+    berg_cc_config.setdefault("rn_method", pc.DEFAULT_RN_METHOD)
 
     segmented = np.load(folder / segmented_file)
     body_array = np.load(folder / body_array_file)

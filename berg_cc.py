@@ -583,54 +583,33 @@ def solve_potential_field(arrays, G, inlet_indices, outlet_indices,
     cols = np.concatenate([cols, np.arange(N_pores)])
     data = np.concatenate([data, diag_vals])
 
-    A = sps.csr_matrix((data, (rows, cols)), shape=(N_pores, N_pores))
     b = np.zeros(N_pores)
 
-    # ── Pin isolated nodes (diagonal == 0, not a boundary) ───────────────
+    # ── Pin isolated nodes AND dead-end nodes ─────────────────────────────
     # Bodies with no valid throat connections produce a zero row in the
     # Laplacian which makes the matrix singular. Pin them to V=0 so the
     # system is always non-singular regardless of network connectivity.
-    # ── Pin isolated nodes AND dead-end nodes ─────────────────────────────
-    # Build list of all nodes to pin (isolated + dead-end)
-    pin_set = set()
+    is_boundary = np.zeros(N_pores, dtype=bool)
+    is_boundary[inlet_indices] = True
+    is_boundary[outlet_indices] = True
 
-    # Isolated nodes (diagonal == 0)
-    diag_array = np.array(A.diagonal())
-    isolated   = np.where(
-        (diag_array == 0) &
-        (~np.isin(np.arange(N_pores),
-                np.concatenate([inlet_indices, outlet_indices])))
-    )[0]
-    pin_set.update(isolated.tolist())
-
-    # Dead-end nodes from conducting_mask
+    pinned = (diag_vals == 0) & ~is_boundary          # isolated nodes
     if conducting_mask is not None:
-        dead_end_indices = np.where(~conducting_mask)[0]
-        pin_set.update(dead_end_indices.tolist())
+        pinned |= ~np.asarray(conducting_mask, dtype=bool)  # dead-end nodes
+    pinned &= ~is_boundary   # boundaries override everything
 
-    # Remove inlet/outlet from pin set — boundaries override everything
-    pin_set -= set(inlet_indices.tolist())
-    pin_set -= set(outlet_indices.tolist())
-
-    # For dead-end nodes: zero out ENTIRE row AND column, then pin
-    # This prevents their connections from distorting neighbour potentials
-    for p in pin_set:
-        # Zero the column too — removes influence on neighbours
-        A[:, p] = 0.0
-        A[p, :] = 0.0
-        A[p, p] = 1.0
-        b[p]    = 0.0
-
-    # ── Apply Dirichlet boundary conditions ───────────────────────────────
-    for p in inlet_indices:
-        A[p, :] = 0.0
-        A[p, p] = 1.0
-        b[p]    = delta_V
-    for p in outlet_indices:
-        A[p, :] = 0.0
-        A[p, p] = 1.0
-        b[p]    = 0.0
-    A = A.tocsr()
+    # Pinned nodes lose their whole row AND column (so their connections
+    # cannot distort neighbour potentials); Dirichlet nodes lose their row.
+    # Dropping those COO entries before assembly gives the same matrix as
+    # zeroing them in a built CSR matrix, without the sparsity-change cost.
+    keep = ~(pinned[rows] | pinned[cols] | is_boundary[rows])
+    fixed = np.flatnonzero(pinned | is_boundary)
+    A = sps.csr_matrix(
+        (np.concatenate([data[keep], np.ones(len(fixed))]),
+         (np.concatenate([rows[keep], fixed]), np.concatenate([cols[keep], fixed]))),
+        shape=(N_pores, N_pores))
+    b[inlet_indices] = delta_V
+    b[outlet_indices] = 0.0
 
     # ── Solve ─────────────────────────────────────────────────────────────
     potential = spsolve(A, b)
@@ -909,16 +888,6 @@ def _prepare_cc_augmented_dag(arrays, current, potential, inlet_indices, outlet_
     ptr = np.empty(n_aug + 1, dtype=np.int64)
     ptr[0] = 0
     np.cumsum(counts, out=ptr[1:])
-
-
-
-    print({
-        "S": int(S), "T": int(T), "n_aug": int(n_aug),
-        "I_threshold": float(I_threshold), "n_pruned": n_pruned,
-        "up": up_s, "dn": dn_s, "flow": flow_s,
-        "kind": kind_s, "edge": edge_s, "ptr": ptr,
-    })
-
 
     return {
         "S": int(S), "T": int(T), "n_aug": int(n_aug),
@@ -1411,23 +1380,15 @@ def recover_segment_potentials(arrays, potential, current, conductance_data):
     Phi_1t  = np.full(N, np.nan)
     Phi_2t  = np.full(N, np.nan)
 
-    for t in range(N):
-        i, j = conns[t, 0], conns[t, 1]
-        if i < 0 or j < 0:
-            continue                         # invalid throat
+    # Skip invalid (conns == -1) and non-conducting throats.
+    ok = (conns[:, 0] >= 0) & (conns[:, 1] >= 0) & (np.abs(current) >= 1e-30)
+    I_t = current[ok]
 
-        I_t = float(current[t])
-        if abs(I_t) < 1e-30:
-            continue                         # non-conducting throat
-
-        Phi_i = potential[i]
-        Phi_j = potential[j]
-
-        # current sign convention: positive = flow from node i → node j
-        # body-1 segment is always on the i side, body-2 on the j side
-        # regardless of flow direction — signs handle direction automatically
-        Phi_1t[t] = Phi_i - I_t * R1[t]    # Φ_1t = Φ_i - I * R1
-        Phi_2t[t] = Phi_j + I_t * R2[t]    # Φ_2t = Φ_j + I * R2
+    # current sign convention: positive = flow from node i → node j
+    # body-1 segment is always on the i side, body-2 on the j side
+    # regardless of flow direction — signs handle direction automatically
+    Phi_1t[ok] = potential[conns[ok, 0]] - I_t * R1[ok]    # Φ_1t = Φ_i - I * R1
+    Phi_2t[ok] = potential[conns[ok, 1]] + I_t * R2[ok]    # Φ_2t = Φ_j + I * R2
 
     return Phi_1t, Phi_2t
 
@@ -1549,44 +1510,27 @@ def compute_local_iota_squared(arrays, potential, Phi_1t, Phi_2t,
 
     scale = (float(delta_s) / float(delta_V)) ** 2
 
-    numerator = 0.0
+    # Skip throats whose interface potentials are invalid.
+    # This keeps nonconducting/ill-defined throats at ι² = 0.
+    conducting &= np.isfinite(Phi_1t) & np.isfinite(Phi_2t)
+    t = np.flatnonzero(conducting)
 
-    for t in np.where(conducting)[0]:
-        i, j = conns[t, 0], conns[t, 1]
+    Phi_i = potential[conns[t, 0]]
+    Phi_j = potential[conns[t, 1]]
+    Phi_a = Phi_1t[t]
+    Phi_b = Phi_2t[t]
 
-        Phi_i = float(potential[i])
-        Phi_j = float(potential[j])
-        Phi_a = float(Phi_1t[t])
-        Phi_b = float(Phi_2t[t])
+    # Segment potential drops (absolute: ι² depends on |∇Φ|²) and lengths.
+    dPhi = np.column_stack([np.abs(Phi_i - Phi_a),
+                            np.abs(Phi_a - Phi_b),
+                            np.abs(Phi_b - Phi_j)])
+    l = np.maximum(np.column_stack([L_body1[t], L_throat[t], L_body2[t]]), 1e-8)
 
-        # Skip if interface potentials are invalid.
-        # This keeps nonconducting/ill-defined throats at ι² = 0.
-        if not (np.isfinite(Phi_a) and np.isfinite(Phi_b)):
-            conducting[t] = False
-            continue
+    # Local Berg factor:
+    # ι² = (ΔΦ_segment / length_segment)^2 * (Δs / ΔΦ_sample)^2
+    iota_sq[t] = (dPhi / l) ** 2 * scale
 
-        # Segment potential drops.
-        # Use absolute values because ι² depends on |∇Φ|².
-        dPhi_1 = abs(Phi_i - Phi_a)
-        dPhi_3 = abs(Phi_a - Phi_b)
-        dPhi_2 = abs(Phi_b - Phi_j)
-
-        # Segment lengths.
-        l_1 = max(float(L_body1[t]), 1e-8)
-        l_3 = max(float(L_throat[t]), 1e-8)
-        l_2 = max(float(L_body2[t]), 1e-8)
-
-        # Local Berg factor:
-        # ι² = (ΔΦ_segment / length_segment)^2 * (Δs / ΔΦ_sample)^2
-        iota_sq[t, 0] = (dPhi_1 / l_1) ** 2 * scale
-        iota_sq[t, 1] = (dPhi_3 / l_3) ** 2 * scale
-        iota_sq[t, 2] = (dPhi_2 / l_2) ** 2 * scale
-
-        numerator += (
-            V_body1[t]   * iota_sq[t, 0] +
-            V_throat[t]  * iota_sq[t, 1] +
-            V_body2[t]   * iota_sq[t, 2]
-        )
+    numerator = float(np.sum(V_seg[t] * iota_sq[t]))
 
     # If any throats were removed because Phi_1t/Phi_2t were invalid,
     # recompute Ωc consistently.
